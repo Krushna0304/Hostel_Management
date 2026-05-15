@@ -36,7 +36,7 @@ public class FloorService {
             throw new NotFoundException("Hostel not found or unauthorized");
         }
 
-        if(floorRepository.existsByFloorNumberAndHostel_Owner_UserId(createFloorRequest.getFloorNumber(),ownerId)) {
+        if(floorRepository.existsByFloorNumberAndHostel_HostelId(createFloorRequest.getFloorNumber(), uuid)) {
             throw new AlreadyExistException("Floor Number already exists");
         }
         Floor floor = FloorMapper.toEntity(createFloorRequest, hostel);

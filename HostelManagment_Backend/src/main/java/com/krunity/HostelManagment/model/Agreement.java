@@ -2,8 +2,6 @@ package com.krunity.HostelManagment.model;
 
 import com.krunity.HostelManagment.enums.AgreementStatus;
 import com.krunity.HostelManagment.enums.AgreementType;
-import com.krunity.HostelManagment.enums.PlanStatus;
-import com.krunity.HostelManagment.model.plan.*;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -31,6 +29,7 @@ public class Agreement {
     
     private UUID userId;
     private UUID roomId; // null for worker
+    private UUID ownerId; // owner who created this agreement
     
     // Legacy fields - kept for backward compatibility, but will be populated from planSnapshot
     private BigDecimal rent;
@@ -45,6 +44,10 @@ public class Agreement {
     // Plan-based fields
     private String planId; // Reference to the selected plan
     private RoomAgreementPlan planSnapshot; // Complete snapshot of the plan at agreement creation time
+
+    // Co-tenant names for FLAT agreements (0–5 entries, each ≤ 100 chars); absent on ROOM/WORKER agreements
+    @Builder.Default
+    private List<String> coTenantNames = new ArrayList<>();
     
     private LocalDate startDate;
     
@@ -56,6 +59,10 @@ public class Agreement {
     
     private Instant createdAt;
     private Instant activatedAt;
+
+    // Transient — populated after activation, not persisted to MongoDB
+    @org.springframework.data.annotation.Transient
+    private String passwordResetToken;
 
 
     @Entity

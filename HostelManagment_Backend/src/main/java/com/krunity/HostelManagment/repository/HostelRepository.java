@@ -15,4 +15,6 @@ public interface HostelRepository extends JpaRepository<Hostel, UUID> {
     Hostel findByHostelIdAndOwner_UserId(UUID hostelId, UUID ownerId);
 
     List<Hostel> findByOwner_UserId(UUID ownerId);
+    
+    boolean existsByHostelNameAndOwner_UserId(String hostelName, UUID ownerId);
 }

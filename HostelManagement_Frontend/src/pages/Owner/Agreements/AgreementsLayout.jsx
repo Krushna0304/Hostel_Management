@@ -1,25 +1,25 @@
-import { Routes, Route, useNavigate } from "react-router-dom";
-import AgreementStepper from "./AgreementStepper";
-import AgreementList from "./AgreementList";
-import Button from "../../../components/Button";
+import { Route, Routes, useNavigate } from 'react-router-dom'
+import AgreementStepper from './AgreementStepper'
+import AgreementList from './AgreementList'
+import { Button, PageHeader } from '../../../components/ui'
 
 export default function AgreementsLayout() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
   return (
-    <div className="p-4 min-h-screen bg-gray-50">
-      <div className="mb-6 flex gap-2">
-        <Button
-          label="View All Agreements"
-          onClick={() => navigate("/owner/agreements")}
-          variant="secondary"
-        />
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Agreement operations"
+        title="Agreements"
+        description="Manage tenant onboarding agreements, creation flows, and status tracking from a cleaner interface."
+        action={<Button label="Create agreement" onClick={() => navigate('/owner/agreements/create')} />}
+        secondaryAction={<Button label="Back to dashboard" variant="secondary" onClick={() => navigate('/owner/dashboard')} />}
+      />
 
       <Routes>
         <Route path="/" element={<AgreementList />} />
         <Route path="/create" element={<AgreementStepper />} />
       </Routes>
     </div>
-  );
+  )
 }

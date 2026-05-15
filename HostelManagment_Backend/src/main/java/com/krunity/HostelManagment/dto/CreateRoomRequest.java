@@ -1,10 +1,8 @@
 package com.krunity.HostelManagment.dto;
 
-import com.krunity.HostelManagment.model.Floor;
-import com.krunity.HostelManagment.model.Hostel;
+import com.krunity.HostelManagment.enums.RoomType;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
-
-import java.util.UUID;
 
 @Data
 public class CreateRoomRequest {
@@ -13,4 +11,7 @@ public class CreateRoomRequest {
     private Integer totalBeds;
     private Integer availableBeds;
     private Boolean isActive;
+
+    @NotNull(message = "Room type is required")
+    private RoomType roomType;
 }

@@ -13,6 +13,6 @@ public class PaymentModel {
     private String mode; // MONTHLY, QUARTERLY, YEARLY
     private String paymentTiming; // PREPAID, POSTPAID
     private Integer installments;
-    private Integer dueDayOfMonth;
+    private Integer dueDayOfMonth; // Day of month when payment is due (1-28)
 }
 

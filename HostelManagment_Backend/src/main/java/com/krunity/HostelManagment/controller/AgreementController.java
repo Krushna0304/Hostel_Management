@@ -2,7 +2,9 @@ package com.krunity.HostelManagment.controller;
 
 import com.krunity.HostelManagment.Mapper.AgreementMapper;
 import com.krunity.HostelManagment.dto.AcceptAgreementRequest;
+import com.krunity.HostelManagment.dto.AcceptAgreementResponse;
 import com.krunity.HostelManagment.dto.AgreementResponse;
+import com.krunity.HostelManagment.dto.CreateFlatAgreementRequest;
 import com.krunity.HostelManagment.dto.CreateRoomAgreementRequest;
 import com.krunity.HostelManagment.dto.QrActivationResponse;
 import com.krunity.HostelManagment.dto.QrCodeResponse;
@@ -46,6 +48,13 @@ public class AgreementController {
         response.setExpiry(created.getQrExpiry());
         
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/flat")
+    public ResponseEntity<QrActivationResponse> createFlatAgreement(
+            @Valid @RequestBody CreateFlatAgreementRequest request) {
+        QrActivationResponse response = agreementService.createFlatAgreement(request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
     }
 
 
@@ -98,11 +107,15 @@ public class AgreementController {
     }
 
     @PostMapping("/{id}/accept")
-    public ResponseEntity<AgreementResponse> acceptAgreement(
+    public ResponseEntity<AcceptAgreementResponse> acceptAgreement(
             @PathVariable String id,
             @Valid @RequestBody AcceptAgreementRequest request) {
         Agreement activated = agreementService.activateAgreement(id, request);
-        AgreementResponse response = AgreementMapper.toResponse(activated);
+        AcceptAgreementResponse response = new AcceptAgreementResponse();
+        response.setAgreementId(activated.getId());
+        response.setStatus(activated.getStatus());
+        response.setActivatedAt(activated.getActivatedAt());
+        response.setPasswordResetToken(activated.getPasswordResetToken());
         return ResponseEntity.ok(response);
     }
 

@@ -53,6 +53,10 @@ public class AgreementMapper {
         response.setQrUsed(agreement.getQrUsed());
         response.setCreatedAt(agreement.getCreatedAt());
         response.setActivatedAt(agreement.getActivatedAt());
+        
+        // Include complete plan snapshot
+        response.setPlanSnapshot(agreement.getPlanSnapshot());
+        
         return response;
     }
 }

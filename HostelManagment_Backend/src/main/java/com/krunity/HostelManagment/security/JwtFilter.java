@@ -26,16 +26,23 @@ public class JwtFilter extends OncePerRequestFilter {
             throws IOException, ServletException {
 
         String authHeader = req.getHeader("Authorization");
+        String requestURI = req.getRequestURI();
+        
+        System.out.println("JWT Filter - Request URI: " + requestURI);
+        System.out.println("JWT Filter - Auth Header present: " + (authHeader != null));
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+            System.out.println("JWT Filter - Token extracted, length: " + token.length());
 
             if (jwtUtil.validateToken(token)) {
                 String username = jwtUtil.getSubjectFromToken(token);
+                System.out.println("JWT Filter - Token valid for username: " + username);
                 var userOpt = userRepository.findByUsername(username);
 
                 if (userOpt.isPresent()) {
                     var user = userOpt.get();
+                    System.out.println("JWT Filter - User found: " + user.getUsername() + ", Role: " + user.getRole());
 
                     // Create authentication object (no authorities)
                     UsernamePasswordAuthenticationToken authentication =
@@ -45,8 +52,15 @@ public class JwtFilter extends OncePerRequestFilter {
 
                     // ✅ Set the authentication in SecurityContext
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+                    System.out.println("JWT Filter - Authentication set successfully");
+                } else {
+                    System.out.println("JWT Filter - User not found for username: " + username);
                 }
+            } else {
+                System.out.println("JWT Filter - Token validation failed");
             }
+        } else {
+            System.out.println("JWT Filter - No valid Authorization header");
         }
 
         // Continue with the filter chain

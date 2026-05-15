@@ -1,4 +1,4 @@
-package com.krunity.HostelManagment.Mapper;
+    package com.krunity.HostelManagment.Mapper;
 
 import com.krunity.HostelManagment.dto.PlanResponse;
 import com.krunity.HostelManagment.model.RoomAgreementPlan;
@@ -21,6 +21,7 @@ public class RoomAgreementPlanMapper {
         response.setAgreementCancellationRules(plan.getAgreementCancellationRules());
         response.setLegal(plan.getLegal());
         response.setAudit(plan.getAudit());
+        response.setCustomFields(plan.getCustomFields());
         return response;
     }
 }

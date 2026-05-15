@@ -8,15 +8,12 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(
-        name = "tenant_payment_plans",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"tenant_id", "payment_type_id"})
-        }
-)
+@Table(name = "tenant_payment_plans")
 @Getter
 @Setter
 @NoArgsConstructor
+@Builder
+@AllArgsConstructor
 public class TenantPaymentPlan {
 
     @Id
@@ -30,18 +27,22 @@ public class TenantPaymentPlan {
     @JoinColumn(name = "tenant_id", nullable = false)
     private User tenant;
 
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "payment_type_id", nullable = false)
-//    private PaymentType paymentType;
-
-
-//    @Column(name = "next_due_date")
-//    private LocalDate nextDueDate;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_type_id", nullable = false)
+    private PaymentType paymentType;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "room_allotment_id")
+    private RoomAllotment roomAllotment;
 
     /* -------------------- Payment Details -------------------- */
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String TenantPlanId;
+
+    // Link back to the MongoDB Agreement document
+    @Column(name = "agreement_id")
+    private String agreementId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_frequency", nullable = false)
@@ -49,6 +50,9 @@ public class TenantPaymentPlan {
 
     @Column(name = "deposit_amount", nullable = false)
     private Long depositAmount;
+
+    @Column(name = "installment_amount", nullable = false)
+    private Long installmentAmount;
 
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
@@ -60,5 +64,6 @@ public class TenantPaymentPlan {
     private Integer pendingInstallments;
 
     @Column(name = "is_active", nullable = false)
-    private boolean isActive;
+    @Builder.Default
+    private boolean isActive = true;
 }

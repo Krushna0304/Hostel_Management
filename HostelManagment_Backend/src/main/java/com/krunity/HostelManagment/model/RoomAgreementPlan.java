@@ -18,13 +18,19 @@ public class RoomAgreementPlan {
     @Id
     private String id;
 
-    private String planType; // ROOM_AGREEMENT
+    private String planType; // PG_ROOM or FLAT; absent/null treated as PG_ROOM
     private String planName;
     private PlanStatus status;
 
+    // Owner who created this plan — null means it's a global/system plan visible to all
+    private java.util.UUID ownerId;
+
+    // Custom fields — owner can add arbitrary key-value metadata
+    private java.util.Map<String, Object> customFields;
+
     private Duration duration;
     private PaymentModel paymentModel;
-    private RentDetails rentDetails; // monthly rent amount and due date
+    private RentDetails rentDetails;
     private Charges charges;
     private FreeFacilities freeFacilities;
     private LatePaymentPolicy latePaymentPolicy;

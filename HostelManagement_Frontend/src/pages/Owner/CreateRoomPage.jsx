@@ -1,100 +1,188 @@
-import { useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import Button from '../../components/Button';
-import { roomService } from '../../services/hostelService';
+import { useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { roomService } from '../../services/hostelService'
+import FormInput from '../../components/FormInput'
+import FormSelect from '../../components/FormSelect'
+import { Alert, Button, Card, CardContent, CardHeader, PageHeader } from '../../components/ui'
 
 const CreateRoomPage = () => {
-  const { hostelId: paramHostelId, floorId: paramFloorId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const hostelId = location.state?.hostelId || paramHostelId;
-  const floorId = location.state?.floorId || paramFloorId;
+  const { hostelId: paramHostelId, floorId: paramFloorId } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const hostelId = location.state?.hostelId || paramHostelId
+  const floorId = location.state?.floorId || paramFloorId
+  const hostelName = location.state?.hostelName || `Hostel ${hostelId}`
+  const floorNumber = location.state?.floorNumber || floorId
   const [form, setForm] = useState({
     roomNumber: '',
     roomDetails: '',
+    roomType: '',
     totalBeds: '',
     availableBeds: '',
     isActive: true,
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleChange = e => {
-    const { name, value, type, checked } = e.target;
-    setForm(f => ({
-      ...f,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
+  // Room type options matching the backend enum
+  const roomTypeOptions = [
+    { value: 'PG_ROOM', label: 'PG Room' },
+    { value: 'FLAT', label: 'Flat' },
+  ]
 
-  const handleSubmit = async e => {
-    e.preventDefault();
-    setError('');
-    if (!form.roomNumber || !form.totalBeds || !form.availableBeds) {
-      setError('Room number, total beds, and available beds are required.');
-      return;
+  const handleChange = (event) => {
+    const { name, value, type, checked } = event.target
+    setForm((current) => ({
+      ...current,
+      [name]: type === 'checkbox' ? checked : value,
+    }))
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    setError('')
+
+    if (!form.roomNumber || !form.roomType || !form.totalBeds || !form.availableBeds) {
+      setError('Room number, room type, total beds, and available beds are required.')
+      return
     }
-    setLoading(true);
+
+    if (Number(form.availableBeds) > Number(form.totalBeds)) {
+      setError('Available beds cannot be greater than total beds.')
+      return
+    }
+
+    setLoading(true)
     try {
       await roomService.createRoom(hostelId, floorId, {
         roomNumber: form.roomNumber,
         roomDetails: form.roomDetails,
+        roomType: form.roomType,
         totalBeds: Number(form.totalBeds),
         availableBeds: Number(form.availableBeds),
         isActive: form.isActive,
-      });
-      navigate(`/owner/hostels/${hostelId}/floors/${floorId}/rooms`, { state: { hostelId, floorId } });
+      })
+
+      navigate(`/owner/hostels/${hostelId}/floors/${floorId}/rooms`, {
+        state: { hostelId, floorId, hostelName, floorNumber },
+      })
     } catch (err) {
       const errorData = err.response?.data
-      
-      // Check if error is field-specific validation errors (object with field names as keys)
       if (errorData && typeof errorData === 'object' && !errorData.message) {
-        // It's field-specific errors - format them for display
-        const errorMessages = Object.values(errorData).join(', ')
-        setError(errorMessages || 'Failed to add room.')
+        setError(Object.values(errorData).join(', ') || 'Failed to add room.')
       } else {
-        // It's a general error message
         setError(errorData?.message || 'Failed to add room.')
       }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-      <div className="bg-white rounded-lg shadow p-6 w-full max-w-md">
-        <div className="flex gap-2 items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Add Room</h1>
-        </div>
-        <form onSubmit={handleSubmit}>
-          {error && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">{error}</div>}
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Room Number</label>
-            <input type="text" name="roomNumber" value={form.roomNumber} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2" required />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Room Details</label>
-            <input type="text" name="roomDetails" value={form.roomDetails} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2" />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Total Beds</label>
-            <input type="number" name="totalBeds" value={form.totalBeds} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2" required min={1} />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Available Beds</label>
-            <input type="number" name="availableBeds" value={form.availableBeds} onChange={handleChange} className="w-full border border-gray-300 rounded px-3 py-2" required min={0} />
-          </div>
-          <div className="mb-6 flex items-center">
-            <input type="checkbox" name="isActive" checked={form.isActive} onChange={handleChange} className="mr-2" />
-            <label className="text-gray-700">Active</label>
-          </div>
-          <Button type="submit" label={loading ? 'Adding...' : 'Add Room'} fullWidth disabled={loading} />
-          <Button type="button" label="Cancel" variant="secondary" fullWidth onClick={() => navigate(-1)} />
-        </form>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Room setup"
+        title={`Add a room to floor ${floorNumber}`}
+        description={`Create a structured room record for ${hostelName}, including beds, availability, and operational status.`}
+        secondaryAction={
+          <Button
+            label="Back to rooms"
+            variant="secondary"
+            onClick={() =>
+              navigate(`/owner/hostels/${hostelId}/floors/${floorId}/rooms`, {
+                state: { hostelId, floorId, hostelName, floorNumber },
+              })
+            }
+          />
+        }
+      />
+
+      <div className="max-w-3xl">
+        <Card>
+          <CardHeader title="Room details" description="Use clear identifiers and accurate bed counts to keep occupancy reporting reliable." />
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {error ? <Alert tone="error">{error}</Alert> : null}
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <FormInput
+                  label="Room number"
+                  name="roomNumber"
+                  value={form.roomNumber}
+                  onChange={handleChange}
+                  placeholder="A-101"
+                  required
+                />
+                <FormSelect
+                  label="Room type"
+                  name="roomType"
+                  value={form.roomType}
+                  onChange={handleChange}
+                  options={roomTypeOptions}
+                  placeholder="Select room type"
+                  required
+                />
+                <FormInput
+                  label="Room details"
+                  name="roomDetails"
+                  value={form.roomDetails}
+                  onChange={handleChange}
+                  placeholder="Near staircase, dual occupancy"
+                />
+                <FormInput
+                  label="Total beds"
+                  name="totalBeds"
+                  type="number"
+                  value={form.totalBeds}
+                  onChange={handleChange}
+                  required
+                  min={1}
+                />
+                <FormInput
+                  label="Available beds"
+                  name="availableBeds"
+                  type="number"
+                  value={form.availableBeds}
+                  onChange={handleChange}
+                  required
+                  min={0}
+                />
+              </div>
+
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <input
+                  type="checkbox"
+                  name="isActive"
+                  checked={form.isActive}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Room is active</p>
+                  <p className="text-sm text-slate-500">Inactive rooms stay visible but won’t appear as active inventory.</p>
+                </div>
+              </label>
+
+              <div className="flex flex-col gap-3 pt-4 sm:flex-row">
+                <Button type="submit" label="Add room" loading={loading} fullWidth />
+                <Button
+                  type="button"
+                  label="Cancel"
+                  variant="secondary"
+                  fullWidth
+                  onClick={() =>
+                    navigate(`/owner/hostels/${hostelId}/floors/${floorId}/rooms`, {
+                      state: { hostelId, floorId, hostelName, floorNumber },
+                    })
+                  }
+                />
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default CreateRoomPage;
+export default CreateRoomPage

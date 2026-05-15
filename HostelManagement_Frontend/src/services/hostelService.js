@@ -16,6 +16,21 @@ export const hostelService = {
     return apiClient.get('/hostels')
   },
 
+  // Get all hostels for the current owner
+  getOwnerHostels: () => {
+    return apiClient.get('/hostels')
+  },
+
+  // Get all rooms for a specific hostel
+  getHostelRooms: (hostelId) => {
+    return apiClient.get(`/owner/hostels/${hostelId}/rooms`)
+  },
+
+  // Get all tenants for a specific hostel
+  getHostelTenants: (hostelId) => {
+    return apiClient.get(`/owner/hostels/${hostelId}/tenants`)
+  },
+
   // Get single hostel by ID
   getHostelById: (hostelId) => {
     // TODO: Verify endpoint
@@ -82,9 +97,16 @@ export const roomService = {
   },
 
   // Get only active rooms for a floor
-  getActiveRoomsByFloor: (hostelId, floorId) => {
+  getActiveRoomsByFloor: (hostelId, floorId, roomType) => {
     // Backend expects: /hostels/{hostelId}/{floorId}/rooms/active
-    return apiClient.get(`/hostels/${hostelId}/${floorId}/rooms/active`);
+    const params = roomType ? `?roomType=${roomType}` : ''
+    return apiClient.get(`/hostels/${hostelId}/${floorId}/rooms/active${params}`)
+  },
+
+  // Get tenants assigned to a room
+  getRoomTenants: (hostelId, floorId, roomId) => {
+    // Backend expects: /hostels/{hostelId}/{floorId}/rooms/{roomId}/tenants
+    return apiClient.get(`/hostels/${hostelId}/${floorId}/rooms/${roomId}/tenants`);
   },
 
   // Get, update, delete room by id (if needed)

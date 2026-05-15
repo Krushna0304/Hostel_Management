@@ -21,5 +21,8 @@ public class PlanResponse {
     private AgreementCancellationRules agreementCancellationRules;
     private Legal legal;
     private PlanAudit audit;
+    
+    // Custom fields
+    private java.util.Map<String, Object> customFields;
 }
 

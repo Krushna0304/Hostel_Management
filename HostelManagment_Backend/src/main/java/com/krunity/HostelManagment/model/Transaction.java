@@ -24,8 +24,8 @@ public class Transaction {
     private UUID transactionId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "plan_id", nullable = false)
-    private TenantPaymentPlan planId;  // from MongoDB document
+    @JoinColumn(name = "plan_id", nullable = true)
+    private TenantPaymentPlan planId;  // null for other-charge transactions
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "from_user_id", nullable = false)
@@ -50,6 +50,7 @@ public class Transaction {
     private String reason;
 
     @Column(name = "otp_verified", nullable = false)
+    @Builder.Default
     private Boolean otpVerified = false;
 
     @CreationTimestamp

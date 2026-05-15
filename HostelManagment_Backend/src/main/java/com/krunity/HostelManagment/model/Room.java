@@ -1,6 +1,7 @@
 package com.krunity.HostelManagment.model;
 
 
+import com.krunity.HostelManagment.enums.RoomType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -45,4 +46,8 @@ public class Room {
 
     @Column(name = "is_active",nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
     private Boolean isActive;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "room_type")
+    private RoomType roomType;
 }

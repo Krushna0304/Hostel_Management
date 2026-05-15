@@ -47,10 +47,15 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/users/**").permitAll()
-                        .requestMatchers("/api/agreements/qr/**").permitAll() // Public QR activation route
-                        .requestMatchers("/api/password-reset/**").permitAll() // Password reset endpoints
-                        .requestMatchers("/api/agreements/*/accept").permitAll() // Public QR activation route
-                        .requestMatchers("/api/agreements/*/reject").permitAll() // Public QR activation route
+                        .requestMatchers("/api/agreements/qr/**").permitAll()
+                        .requestMatchers("/api/password-reset/**").permitAll()
+                        .requestMatchers("/api/cash-payment-otp/**").permitAll()
+                        .requestMatchers("/api/payments/create-order").permitAll()
+                        .requestMatchers("/api/payments/verify-payment").permitAll()
+                        .requestMatchers("/api/agreements/*/accept").permitAll()
+                        .requestMatchers("/api/agreements/*/reject").permitAll()
+                        .requestMatchers("/tenant/**").authenticated()
+                        .requestMatchers("/owner/reports/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)

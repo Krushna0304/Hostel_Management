@@ -8,11 +8,11 @@ import com.krunity.HostelManagment.model.User;
 
 public class UserMapper {
 
-    public static User toEntity(CreateUserRequest createUserRequest, Role role) {
+    public static User toEntity(CreateUserRequest createUserRequest, Role role, String hashedPassword) {
         return User.builder()
         .displayName(createUserRequest.getDisplayName())
         .username(createUserRequest.getUsername())
-        .passwordHash(createUserRequest.getPassword())
+        .passwordHash(hashedPassword)
         .phoneNumber(createUserRequest.getPhoneNumber())
         .role(role)
         .isActive(createUserRequest.getIsActive())

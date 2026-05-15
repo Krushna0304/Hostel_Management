@@ -15,5 +15,9 @@ public class SecurityDeposit {
     private BigDecimal amount;
     private Boolean refundable;
     private Integer refundProcessingDays;
+    
+    // New field to specify when this charge is collected
+    @Builder.Default
+    private PaymentTiming paymentTiming = PaymentTiming.AT_AGREEMENT;
 }
 

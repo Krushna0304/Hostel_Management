@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HostelHub - Modern Hostel Management Platform</title>
+    <link rel="stylesheet" href="/landing.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-content">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <rect width="32" height="32" rx="8" fill="#0F172A"/>
+                        <path d="M8 12h16M8 16h16M8 20h16" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span>HostelHub</span>
+                </div>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#how-it-works">How It Works</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#faq">FAQ</a>
+                </div>
+                <div class="nav-actions">
+                    <a href="/login" class="btn-secondary">Sign In</a>
+                    <a href="/register" class="btn-primary">Get Started Free</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <div class="badge">🚀 Now with Automated Rent Reminders</div>
+                    <h1>Manage Your Hostels Like a Pro</h1>
+                    <p class="hero-subtitle">
+                        Streamline rent collection, automate reminders, and manage tenants from a single powerful dashboard. 
+                        Built for modern hostel owners.
+                    </p>
+                    <div class="hero-cta">
+                        <a href="/register" class="btn-primary btn-large">
+                            Start Free Trial
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M7.5 15l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </a>
+                        <a href="#demo" class="btn-secondary btn-large">
+                            Watch Demo
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M8 6l6 4-6 4V6z" fill="currentColor"/>
+                            </svg>
+                        </a>
+                    </div>
+                    <div class="hero-stats">
+                        <div class="stat">
+                            <div class="stat-value">500+</div>
+                            <div class="stat-label">Hostels Managed</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">10K+</div>
+                            <div class="stat-label">Active Tenants</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">99.9%</div>
+                            <div class="stat-label">Uptime</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-image">
+                    <div class="dashboard-mockup">
+                        <div class="mockup-header">
+                            <div class="mockup-dots">
+                                <span></span><span></span><span></span>
+                            </div>
+                            <div class="mockup-title">Owner Dashboard</div>
+                        </div>
+                        <div class="mockup-content">
+                            <div class="mockup-sidebar">
+                                <div class="mockup-menu-item active">📊 Dashboard</div>
+                                <div class="mockup-menu-item">🏢 Hostels</div>
+                                <div class="mockup-menu-item">👥 Tenants</div>
+                                <div class="mockup-menu-item">💰 Payments</div>
+                                <div class="mockup-menu-item">📄 Agreements</div>
+                            </div>
+                            <div class="mockup-main">
+                                <div class="mockup-card">
+                                    <div class="mockup-card-title">Monthly Revenue</div>
+                                    <div class="mockup-card-value">₹2,45,000</div>
+                                    <div class="mockup-chart"></div>
+                                </div>
+                                <div class="mockup-card">
+                                    <div class="mockup-card-title">Pending Payments</div>
+                                    <div class="mockup-card-value">₹34,000</div>
+                                    <div class="mockup-list">
+                                        <div class="mockup-list-item"></div>
+                                        <div class="mockup-list-item"></div>
+                                        <div class="mockup-list-item"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Everything You Need to Manage Hostels</h2>
+                <p>Powerful features designed for modern hostel management</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">💰</div>
+                    <h3>Smart Payment Collection</h3>
+                    <p>Accept payments via Razorpay with both online and cash options. OTP verification for cash payments ensures security.</p>
+                    <ul class="feature-list">
+                        <li>Online payments via Razorpay</li>
+                        <li>Cash payment with OTP verification</li>
+                        <li>Installment tracking</li>
+                        <li>Payment history & receipts</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🔔</div>
+                    <h3>Automated Rent Reminders</h3>
+                    <p>Never chase tenants again. Automated SMS and email reminders sent at the right time with customizable templates.</p>
+                    <ul class="feature-list">
+                        <li>5 days before due date</li>
+                        <li>On due date reminder</li>
+                        <li>Overdue payment alerts</li>
+                        <li>Custom SMS templates (PRO)</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">📄</div>
+                    <h3>Digital Agreements</h3>
+                    <p>Create, send, and manage rental agreements digitally. QR code activation for seamless tenant onboarding.</p>
+                    <ul class="feature-list">
+                        <li>Customizable agreement plans</li>
+                        <li>QR code activation</li>
+                        <li>Digital signatures</li>
+                        <li>Automatic plan snapshots</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🏢</div>
+                    <h3>Multi-Hostel Management</h3>
+                    <p>Manage multiple hostels, floors, and rooms from a single dashboard. Perfect for growing businesses.</p>
+                    <ul class="feature-list">
+                        <li>Unlimited hostels (PRO+)</li>
+                        <li>Floor & room organization</li>
+                        <li>Occupancy tracking</li>
+                        <li>Facility management</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>Tenant Portal</h3>
+                    <p>Give tenants a self-service portal to view payments, make payments, and access their agreement details.</p>
+                    <ul class="feature-list">
+                        <li>Payment dashboard</li>
+                        <li>Payment history</li>
+                        <li>Agreement viewer</li>
+                        <li>Payment reminders</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Analytics & Reports</h3>
+                    <p>Track revenue, occupancy, and payment trends with comprehensive analytics and reporting tools.</p>
+                    <ul class="feature-list">
+                        <li>Revenue tracking</li>
+                        <li>Collection reports</li>
+                        <li>Occupancy analytics</li>
+                        <li>Overdue tracking</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <h2>How It Works</h2>
+                <p>Get started in minutes, not hours</p>
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Create Your Hostel</h3>
+                        <p>Add your hostel details, floors, and rooms. Set up facilities and amenities.</p>
+                    </div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Create Agreement Plans</h3>
+                        <p>Define rent, payment schedules, rules, and facilities. Create custom plans for different room types.</p>
+                    </div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Onboard Tenants</h3>
+                        <p>Create agreements and send QR codes. Tenants activate via mobile and make initial payment.</p>
+                    </div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Automate Everything</h3>
+                        <p>Sit back as reminders are sent automatically and payments are tracked in real-time.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing">
+        <div class="container">
+            <div class="section-header">
+                <h2>Simple, Transparent Pricing</h2>
+                <p>Choose the plan that fits your business</p>
+            </div>
+            <div class="pricing-grid">
+                <!-- Free Tier -->
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Free</h3>
+                        <div class="pricing-price">
+                            <span class="currency">₹</span>
+                            <span class="amount">0</span>
+                            <span class="period">/month</span>
+                        </div>
+                        <p class="pricing-description">Perfect for testing and small properties</p>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>✅ 1 Hostel</li>
+                        <li>✅ Up to 10 Tenants</li>
+                        <li>✅ Email Reminders</li>
+                        <li>✅ Basic Payment Tracking</li>
+                        <li>✅ Digital Agreements</li>
+                        <li>✅ Razorpay Test Mode</li>
+                        <li>❌ SMS Reminders</li>
+                        <li>❌ Custom Templates</li>
+                    </ul>
+                    <a href="/register?plan=free" class="btn-outline">Start Free</a>
+                </div>
+
+                <!-- Beta Tier -->
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Beta</h3>
+                        <div class="pricing-badge">Early Access</div>
+                        <div class="pricing-price">
+                            <span class="currency">₹</span>
+                            <span class="amount">199</span>
+                            <span class="period">/month</span>
+                        </div>
+                        <p class="pricing-description">6 months free access to all features</p>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>✅ Up to 3 Hostels</li>
+                        <li>✅ Up to 50 Tenants</li>
+                        <li>✅ SMS + Email Reminders</li>
+                        <li>✅ Live Razorpay Integration</li>
+                        <li>✅ Payment Analytics</li>
+                        <li>✅ Priority Email Support</li>
+                        <li>✅ 6 Months Validity</li>
+                        <li>❌ Custom Templates</li>
+                    </ul>
+                    <a href="/register?plan=beta" class="btn-outline">Join Beta</a>
+                </div>
+
+                <!-- Pro Tier -->
+                <div class="pricing-card featured">
+                    <div class="pricing-badge-top">Most Popular</div>
+                    <div class="pricing-header">
+                        <h3>Pro</h3>
+                        <div class="pricing-price">
+                            <span class="currency">₹</span>
+                            <span class="amount">499</span>
+                            <span class="period">/month</span>
+                        </div>
+                        <p class="pricing-description">For growing hostel businesses</p>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>✅ Up to 10 Hostels</li>
+                        <li>✅ Up to 200 Tenants</li>
+                        <li>✅ SMS + Email Reminders</li>
+                        <li>✅ Custom SMS Templates</li>
+                        <li>✅ Advanced Analytics</li>
+                        <li>✅ Priority Support</li>
+                        <li>✅ Webhook Integration</li>
+                        <li>✅ API Access</li>
+                    </ul>
+                    <a href="/register?plan=pro" class="btn-primary">Upgrade to Pro</a>
+                </div>
+
+                <!-- Enterprise Tier -->
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Enterprise</h3>
+                        <div class="pricing-price">
+                            <span class="amount">Custom</span>
+                        </div>
+                        <p class="pricing-description">For large hostel chains</p>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>✅ Unlimited Hostels</li>
+                        <li>✅ Unlimited Tenants</li>
+                        <li>✅ Everything in Pro</li>
+                        <li>✅ Dedicated Support</li>
+                        <li>✅ Custom Integrations</li>
+                        <li>✅ SLA Guarantee</li>
+                        <li>✅ Training & Onboarding</li>
+                        <li>✅ White-label Option</li>
+                    </ul>
+                    <a href="#contact" class="btn-outline">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- User Roles Section -->
+    <section class="roles">
+        <div class="container">
+            <div class="section-header">
+                <h2>Built for Everyone</h2>
+                <p>Different portals for different needs</p>
+            </div>
+            <div class="roles-grid">
+                <div class="role-card">
+                    <div class="role-icon">👑</div>
+                    <h3>Hostel Owners</h3>
+                    <p>Complete control over your properties</p>
+                    <ul>
+                        <li>Manage multiple hostels</li>
+                        <li>Create and track agreements</li>
+                        <li>Monitor payments and revenue</li>
+                        <li>Send automated reminders</li>
+                        <li>Generate reports</li>
+                    </ul>
+                </div>
+                <div class="role-card">
+                    <div class="role-icon">🏠</div>
+                    <h3>Tenants</h3>
+                    <p>Self-service portal for convenience</p>
+                    <ul>
+                        <li>View payment schedule</li>
+                        <li>Make online payments</li>
+                        <li>Access agreement details</li>
+                        <li>Receive payment reminders</li>
+                        <li>Track payment history</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="faq">
+        <div class="container">
+            <div class="section-header">
+                <h2>Frequently Asked Questions</h2>
+            </div>
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <h3>Can I use Razorpay test mode?</h3>
+                    <p>Yes! The FREE tier includes Razorpay test mode so you can test the entire payment flow without real transactions. Upgrade to BETA or PRO for live payments.</p>
+                </div>
+                <div class="faq-item">
+                    <h3>How do automated reminders work?</h3>
+                    <p>Reminders are sent automatically: 5 days before due date, on due date, and daily after due date for overdue payments. SMS reminders require BETA or higher plan.</p>
+                </div>
+                <div class="faq-item">
+                    <h3>Can I customize SMS templates?</h3>
+                    <p>Yes! PRO and ENTERPRISE plans allow you to create custom SMS templates with dynamic placeholders like tenant name, amount, due date, etc.</p>
+                </div>
+                <div class="faq-item">
+                    <h3>How does tenant onboarding work?</h3>
+                    <p>Create an agreement, generate a QR code, and send it to the tenant. They scan it, review the agreement, make the initial payment, and set their password.</p>
+                </div>
+                <div class="faq-item">
+                    <h3>Can tenants pay with cash?</h3>
+                    <p>Yes! We support both online and cash payments. Cash payments use OTP verification sent to the owner's phone for security.</p>
+                </div>
+                <div class="faq-item">
+                    <h3>What happens when I upgrade?</h3>
+                    <p>Your new features are enabled immediately. All your data remains intact, and you get access to higher limits and premium features.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <div class="cta-content">
+                <h2>Ready to Modernize Your Hostel Management?</h2>
+                <p>Join hundreds of hostel owners who have automated their rent collection</p>
+                <div class="cta-buttons">
+                    <a href="/register" class="btn-primary btn-large">Start Free Trial</a>
+                    <a href="#contact" class="btn-secondary btn-large">Talk to Sales</a>
+                </div>
+                <p class="cta-note">No credit card required • Free forever plan available</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <rect width="32" height="32" rx="8" fill="#0F172A"/>
+                            <path d="M8 12h16M8 16h16M8 20h16" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>HostelHub</span>
+                    </div>
+                    <p>Modern hostel management platform for the digital age.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Product</h4>
+                    <a href="#features">Features</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#demo">Demo</a>
+                    <a href="/docs">Documentation</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Company</h4>
+                    <a href="/about">About Us</a>
+                    <a href="/blog">Blog</a>
+                    <a href="/careers">Careers</a>
+                    <a href="/contact">Contact</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <a href="/privacy">Privacy Policy</a>
+                    <a href="/terms">Terms of Service</a>
+                    <a href="/security">Security</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 HostelHub. All rights reserved.</p>
+                <div class="footer-social">
+                    <a href="#" aria-label="Twitter">𝕏</a>
+                    <a href="#" aria-label="LinkedIn">in</a>
+                    <a href="#" aria-label="GitHub">⚡</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/landing.js"></script>
+</body>
+</html>

@@ -13,5 +13,8 @@ public class CleaningCharges {
     private Boolean included;
     private String cleaningFrequency; // WEEKLY, MONTHLY, etc.
     private DeepCleaningOnExit deepCleaningOnExit;
+    
+    // New field for monthly cleaning charges included in installments
+    private MonthlyCleaningCharge monthlyCleaningCharge;
 }
 

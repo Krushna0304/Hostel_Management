@@ -3,9 +3,11 @@ package com.krunity.HostelManagment.security;
 
 import com.krunity.HostelManagment.model.User;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.UUID;
 
 public class CustomUserDetails implements UserDetails {
@@ -14,7 +16,17 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return null;
+        // Return the user's role as a GrantedAuthority
+        // Spring Security's hasRole() expects authorities to have "ROLE_" prefix
+        if (user.getRole() != null && user.getRole().getName() != null) {
+            String roleName = user.getRole().getName();
+            // Add ROLE_ prefix if not already present
+            if (!roleName.startsWith("ROLE_")) {
+                roleName = "ROLE_" + roleName;
+            }
+            return Collections.singletonList(new SimpleGrantedAuthority(roleName));
+        }
+        return Collections.emptyList();
     }
 
     @Override public String getPassword() { return user.getPasswordHash(); }
@@ -28,4 +40,5 @@ public class CustomUserDetails implements UserDetails {
     public UUID getId() { return user.getUserId(); }
     public User getUser() { return user; }
 }
+
 

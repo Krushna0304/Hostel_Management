@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormInput from '../../components/FormInput'
-import Button from '../../components/Button'
 import { hostelService } from '../../services/hostelService'
+import { Alert, Button, Card, CardContent, CardHeader, PageHeader } from '../../components/ui'
 
 const CreateHostel = () => {
   const navigate = useNavigate()
@@ -14,17 +14,12 @@ const CreateHostel = () => {
   const [loading, setLoading] = useState(false)
   const [apiError, setApiError] = useState('')
 
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+  const handleChange = (event) => {
+    const { name, value } = event.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+
     if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: '',
-      }))
+      setErrors((prev) => ({ ...prev, [name]: '' }))
     }
   }
 
@@ -35,8 +30,8 @@ const CreateHostel = () => {
     return newErrors
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSubmit = async (event) => {
+    event.preventDefault()
     const newErrors = validateForm()
 
     if (Object.keys(newErrors).length > 0) {
@@ -48,31 +43,39 @@ const CreateHostel = () => {
     setApiError('')
 
     try {
-      // TODO: Verify endpoint and response structure from backend
       await hostelService.createHostel({
         hostelName: formData.hostelName,
         hostelAddress: formData.hostelAddress,
       })
 
-      // Success - redirect to dashboard
-      navigate('/owner/dashboard', { state: { message: 'Hostel created successfully!' } })
+      navigate('/owner/dashboard', { state: { message: 'Hostel created successfully.' } })
     } catch (error) {
-      console.error('Failed to create hostel:', error)
       const errorData = error.response?.data
-      
-      // Check if error is field-specific validation errors (object with field names as keys)
-      if (errorData && typeof errorData === 'object' && !errorData.message) {
-        // It's field-specific errors like {"hostelName": "Hostel name is required"}
+
+      // Priority 1: Check for message field (AlreadyExistException, NotFoundException, etc.)
+      if (errorData && errorData.message) {
+        setApiError(errorData.message)
+        setErrors({})
+      } 
+      // Priority 2: Check for field-specific validation errors (object without message)
+      else if (errorData && typeof errorData === 'object' && Object.keys(errorData).length > 0) {
         const fieldErrors = {}
-        Object.keys(errorData).forEach(field => {
-          fieldErrors[field] = errorData[field]
+        Object.keys(errorData).forEach((field) => {
+          if (field !== 'message') {
+            fieldErrors[field] = errorData[field]
+          }
         })
-        setErrors(prev => ({ ...prev, ...fieldErrors }))
-        setApiError('') // Clear general error, show field errors instead
-      } else {
-        // It's a general error message
-        setApiError(errorData?.message || 'Failed to create hostel. Please try again.')
-        setErrors({}) // Clear field errors
+        if (Object.keys(fieldErrors).length > 0) {
+          setErrors((prev) => ({ ...prev, ...fieldErrors }))
+          setApiError('')
+        } else {
+          setApiError('Failed to create hostel. Please try again.')
+        }
+      } 
+      // Priority 3: Fallback to generic error
+      else {
+        setApiError('Failed to create hostel. Please try again.')
+        setErrors({})
       }
     } finally {
       setLoading(false)
@@ -80,70 +83,83 @@ const CreateHostel = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-800">Create New Hostel</h1>
-        </div>
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Property setup"
+        title="Create a new hostel"
+        description="Capture the property name and address first. Floors and rooms can be added immediately after creation from the workspace."
+        secondaryAction={<Button label="Back to dashboard" variant="secondary" onClick={() => navigate('/owner/dashboard')} />}
+      />
 
-      {/* Main Content */}
-      <main className="max-w-2xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <form onSubmit={handleSubmit}>
-            {/* API Error */}
-            {apiError && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
-                {apiError}
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card>
+          <CardHeader
+            title="Hostel details"
+            description="Use clear naming so your portfolio remains easy to scan as more properties are added."
+          />
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {apiError ? (
+                <Alert tone="error" title="Creation failed">
+                  {apiError}
+                </Alert>
+              ) : null}
+
+              <FormInput
+                label="Hostel name"
+                name="hostelName"
+                type="text"
+                value={formData.hostelName}
+                onChange={handleChange}
+                placeholder="Green Valley Hostel"
+                required
+                error={errors.hostelName}
+                hint="Hostel names must be unique within your portfolio. Keep it short and recognizable for faster navigation."
+              />
+
+              <FormInput
+                label="Hostel address"
+                name="hostelAddress"
+                type="text"
+                value={formData.hostelAddress}
+                onChange={handleChange}
+                placeholder="Street address, city, state, ZIP"
+                required
+                error={errors.hostelAddress}
+              />
+
+              <div className="flex flex-col gap-3 pt-4 sm:flex-row">
+                <Button type="submit" label="Create hostel" loading={loading} fullWidth />
+                <Button
+                  type="button"
+                  label="Cancel"
+                  onClick={() => navigate('/owner/dashboard')}
+                  variant="secondary"
+                  fullWidth
+                />
               </div>
-            )}
+            </form>
+          </CardContent>
+        </Card>
 
-            {/* Hostel Name */}
-            <FormInput
-              label="Hostel Name"
-              name="hostelName"
-              type="text"
-              value={formData.hostelName}
-              onChange={handleChange}
-              placeholder="e.g., Green Valley Hostel"
-              required
-              error={errors.hostelName}
-            />
-
-            {/* Hostel Address */}
-            <FormInput
-              label="Hostel Address"
-              name="hostelAddress"
-              type="text"
-              value={formData.hostelAddress}
-              onChange={handleChange}
-              placeholder="Street address, City, State, ZIP"
-              required
-              error={errors.hostelAddress}
-            />
-
-            {/* Action Buttons */}
-            <div className="flex gap-4 mt-8">
-              <Button
-                type="submit"
-                label={loading ? 'Creating...' : 'Create Hostel'}
-                disabled={loading}
-                fullWidth
-              />
-              <Button
-                type="button"
-                label="Cancel"
-                onClick={() => navigate('/owner/dashboard')}
-                variant="secondary"
-                fullWidth
-              />
-            </div>
-          </form>
-
-          {/* TODO: Add hostel structure guide or hints */}
+        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">What happens next</p>
+          <div className="mt-4 space-y-4">
+            {[
+              'Add floors to define the building structure.',
+              'Create rooms with bed capacity and availability.',
+              'Use agreements to onboard tenants into active inventory.',
+            ].map((item, index) => (
+              <div key={item} className="flex gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
+                  {index + 1}
+                </div>
+                <p className="text-sm leading-6 text-slate-600">{item}</p>
+              </div>
+            ))}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

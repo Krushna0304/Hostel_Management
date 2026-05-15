@@ -12,7 +12,14 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WaterCharges {
-    private String type; // METERED, FIXED
+    private String type; // METERED, FIXED, INCLUDED
     private BigDecimal monthlyAmount;
+    
+    // Water charges are typically included in installments
+    @Builder.Default
+    private PaymentTiming paymentTiming = PaymentTiming.IN_INSTALLMENTS;
+    
+    @Builder.Default
+    private Boolean refundable = false;
 }
 

@@ -20,6 +20,7 @@ public class RoomMapper {
                 .totalBeds(createRoomRequest.getTotalBeds())
                 .availableBeds(createRoomRequest.getAvailableBeds())
                 .isActive(createRoomRequest.getIsActive())
+                .roomType(createRoomRequest.getRoomType())
                 .build();
     }
 
@@ -33,6 +34,7 @@ public class RoomMapper {
                 .totalBeds(room.getTotalBeds())
                 .availableBeds(room.getAvailableBeds())
                 .isActive(room.getIsActive())
+                .roomType(room.getRoomType() != null ? room.getRoomType().name() : "PG_ROOM")
                 .build();
     }
 }

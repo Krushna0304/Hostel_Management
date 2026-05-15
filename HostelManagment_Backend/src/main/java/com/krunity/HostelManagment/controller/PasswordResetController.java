@@ -18,22 +18,14 @@ public class PasswordResetController {
     
     @PostMapping("/generate/{userId}")
     public ResponseEntity<?> generateResetToken(@PathVariable UUID userId) {
-        try {
-            String token = passwordResetService.generatePasswordResetToken(userId);
-            return ResponseEntity.ok(new TokenResponse(token));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
-        }
+        String token = passwordResetService.generatePasswordResetToken(userId);
+        return ResponseEntity.ok(new TokenResponse(token));
     }
     
     @PostMapping("/reset")
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
-        try {
-            passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
-            return ResponseEntity.ok(new SuccessResponse("Password reset successfully"));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
-        }
+        passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(new SuccessResponse("Password reset successfully"));
     }
     
     @GetMapping("/validate/{token}")

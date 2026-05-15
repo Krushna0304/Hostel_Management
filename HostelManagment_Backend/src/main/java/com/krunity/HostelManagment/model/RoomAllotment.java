@@ -1,7 +1,6 @@
 package com.krunity.HostelManagment.model;
 
-
-import com.krunity.HostelManagment.enums.AgreementStatus;
+import com.krunity.HostelManagment.enums.RoomAllotmentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -39,16 +38,16 @@ public class RoomAllotment {
     @JoinColumn(name = "payment_plan_id",nullable = false)
     private TenantPaymentPlan paymentPlanId;
 
-//    @OneToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "deposit_transaction_id",nullable = false)
-//    private Transaction depositTransactionId;  // no need
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "deposit_transaction_id",nullable = false)
+    private Transaction depositTransactionId;
 
     @Column(name = "allotment_date", nullable = false)
     private Date allotmentDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "room_allotment_status", nullable = false)
-    private AgreementStatus roomAllotmentStatus;
+    private RoomAllotmentStatus roomAllotmentStatus;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

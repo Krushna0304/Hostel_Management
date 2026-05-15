@@ -14,5 +14,13 @@ import java.math.BigDecimal;
 public class DeepCleaningOnExit {
     private Boolean applicable;
     private BigDecimal amount;
+    
+    // New field to specify when this charge is collected
+    @Builder.Default
+    private PaymentTiming paymentTiming = PaymentTiming.AT_END;
+    
+    // New field to specify if it's refundable (deducted from deposit)
+    @Builder.Default
+    private Boolean refundable = false;
 }
 

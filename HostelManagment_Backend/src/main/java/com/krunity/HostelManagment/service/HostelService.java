@@ -34,6 +34,13 @@ public class HostelService {
         this.roomRepository = roomRepository;
     }
     public void createHostel(CreateHostelRequest createHostelRequest) {
+        UUID ownerId = ApplicationContext.getUser().getUserId();
+        
+        // Check if hostel name already exists for this owner
+        if (hostelRepository.existsByHostelNameAndOwner_UserId(createHostelRequest.getHostelName(), ownerId)) {
+            throw new com.krunity.HostelManagment.exception.AlreadyExistException("Hostel name already exists for this owner");
+        }
+        
         Hostel hostel = HostelMapper.toEntity(createHostelRequest);
         hostelRepository.save(hostel);
     }
@@ -56,6 +63,18 @@ public class HostelService {
         UUID userId = ApplicationContext.getUser().getUserId();
 
         Hostel hostel = hostelRepository.findByHostelIdAndOwner_UserId(uuid,userId);
+        
+        if (hostel == null) {
+            throw new NotFoundException("Hostel not found or unauthorized");
+        }
+
+        // Check if the new name conflicts with another hostel owned by this user
+        // Only check if the name is being changed
+        if (!hostel.getHostelName().equals(createHostelRequest.getHostelName())) {
+            if (hostelRepository.existsByHostelNameAndOwner_UserId(createHostelRequest.getHostelName(), userId)) {
+                throw new com.krunity.HostelManagment.exception.AlreadyExistException("Hostel name already exists for this owner");
+            }
+        }
 
         hostel.setHostelName(createHostelRequest.getHostelName());
         hostel.setHostelAddress(createHostelRequest.getHostelAddress());

@@ -2,6 +2,7 @@ package com.krunity.HostelManagment.controller;
 
 import com.krunity.HostelManagment.dto.CreateUserRequest;
 import com.krunity.HostelManagment.dto.LoginRequest;
+import com.krunity.HostelManagment.dto.UpdateProfileRequest;
 import com.krunity.HostelManagment.dto.UserResponse;
 import com.krunity.HostelManagment.service.UserService;
 import jakarta.validation.Valid;
@@ -73,5 +74,14 @@ public class UserController {
         }catch(Exception ex){
             return ResponseEntity.status(500).build();
         }
+    }
+
+    // Update profile (displayName, phoneNumber, optional password)
+    @PatchMapping("/{username}/profile")
+    public ResponseEntity<UserResponse> updateProfile(
+            @PathVariable String username,
+            @RequestBody @Valid UpdateProfileRequest request) {
+        UserResponse userResponse = userService.updateProfile(username, request);
+        return ResponseEntity.ok(userResponse);
     }
 }

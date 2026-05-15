@@ -2,10 +2,13 @@ package com.krunity.HostelManagment.controller;
 
 import com.krunity.HostelManagment.dto.CreateRoomRequest;
 import com.krunity.HostelManagment.dto.RoomResponse;
+import com.krunity.HostelManagment.dto.RoomTenantResponse;
+import com.krunity.HostelManagment.exception.NotFoundException;
 import com.krunity.HostelManagment.service.RoomService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/hostels/{hostelId}/{floorId}/rooms")
@@ -30,10 +33,13 @@ public class RoomController {
     }
 
     @GetMapping("/active")
-    public ResponseEntity<?> getAllActiveRooms(@PathVariable String hostelId,@PathVariable String floorId) {
+    public ResponseEntity<?> getAllActiveRooms(@PathVariable String hostelId,@PathVariable String floorId,
+                                               @RequestParam(required = false) String roomType) {
         try{
-            var roomResponses = roomService.getAllActiveRooms(hostelId,floorId);
+            var roomResponses = roomService.getAllActiveRooms(hostelId, floorId, roomType);
             return ResponseEntity.status(200).body(roomResponses);
+        }catch (IllegalArgumentException e){
+            return ResponseEntity.status(400).body(e.getMessage());
         }catch (Exception e){
             return ResponseEntity.status(500).body("Error getting rooms from hostel: " + e.getMessage());
         }
@@ -78,6 +84,18 @@ public class RoomController {
             return ResponseEntity.status(200).body(roomResponse);
         }catch (Exception e){
             return ResponseEntity.status(500).body("Error getting room from hostel: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{roomId}/tenants")
+    public ResponseEntity<?> getTenantList(@PathVariable String hostelId, @PathVariable String floorId, @PathVariable String roomId) {
+        try{
+            List<RoomTenantResponse> tenantResponses = roomService.getTenantList(hostelId, roomId);
+            return ResponseEntity.status(200).body(tenantResponses);
+        } catch (NotFoundException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        } catch (Exception e){
+            return ResponseEntity.status(500).body("Error getting tenants from room: " + e.getMessage());
         }
     }
 }

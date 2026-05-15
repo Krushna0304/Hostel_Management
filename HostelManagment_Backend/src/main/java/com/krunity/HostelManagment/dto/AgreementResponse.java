@@ -2,6 +2,7 @@ package com.krunity.HostelManagment.dto;
 
 import com.krunity.HostelManagment.enums.AgreementStatus;
 import com.krunity.HostelManagment.enums.AgreementType;
+import com.krunity.HostelManagment.model.RoomAgreementPlan;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -30,5 +31,8 @@ public class AgreementResponse {
     private Boolean qrUsed;
     private Instant createdAt;
     private Instant activatedAt;
+    
+    // Complete plan snapshot with all details
+    private RoomAgreementPlan planSnapshot;
 }
 

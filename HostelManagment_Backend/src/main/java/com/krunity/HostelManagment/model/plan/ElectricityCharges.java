@@ -12,7 +12,15 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ElectricityCharges {
-    private String type; // METERED, FIXED
+    private String type; // METERED, FIXED, INCLUDED
     private BigDecimal ratePerUnit;
+    private BigDecimal fixedAmount; // For fixed monthly charges
+    
+    // Electricity charges are typically included in installments
+    @Builder.Default
+    private PaymentTiming paymentTiming = PaymentTiming.IN_INSTALLMENTS;
+    
+    @Builder.Default
+    private Boolean refundable = false;
 }
 

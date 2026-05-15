@@ -5,5 +5,7 @@ public enum TransactionStatus {
     COMPLETED,
     FAILED,
     CANCELLED,
-    SCHEDULED
+    SCHEDULED,
+    OVERDUE,
+    PARTIALLY_PAID
 }

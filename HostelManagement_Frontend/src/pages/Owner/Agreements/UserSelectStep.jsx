@@ -15,6 +15,8 @@ export default function UserSelectStep({ nextStep, prevStep, formData, setFormDa
   const getRoleFromAgreementType = () => {
     if (formData.agreementType === "ROOM") {
       return "TENANT";
+    } else if (formData.agreementType === "FLAT") {
+      return "TENANT";
     } else if (formData.agreementType === "WORKER") {
       return "CLEANER";
     }
@@ -106,8 +108,16 @@ export default function UserSelectStep({ nextStep, prevStep, formData, setFormDa
   };
 
   if (mode === null) {
-    const agreementTypeLabel = formData.agreementType === "ROOM" ? "Room Agreement" : "Worker Agreement";
-    const roleLabel = formData.agreementType === "ROOM" ? "TENANT" : "CLEANER";
+    const agreementTypeLabel =
+      formData.agreementType === "ROOM"
+        ? "Room Agreement"
+        : formData.agreementType === "FLAT"
+        ? "Flat Agreement"
+        : "Worker Agreement";
+    const roleLabel =
+      formData.agreementType === "ROOM" || formData.agreementType === "FLAT"
+        ? "TENANT"
+        : "CLEANER";
     
     return (
       <div className="space-y-4">
@@ -222,7 +232,7 @@ export default function UserSelectStep({ nextStep, prevStep, formData, setFormDa
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
       
-      <div className="flex gap-2">
+      <div className="flex items-end gap-2">
         <FormInput
           label="Username"
           name="searchUsername"

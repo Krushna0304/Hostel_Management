@@ -12,6 +12,7 @@ const AddRoom = () => {
   const [formData, setFormData] = useState({
     hostelId: '',
     floorId: '',
+    roomType: '',
     roomNumber: '',
     roomDetails: '',
     totalBeds: '',
@@ -30,7 +31,6 @@ const AddRoom = () => {
   const fetchHostels = async () => {
     try {
       setFetchLoading(true)
-      // TODO: Verify endpoint returns correct data structure
       const response = await hostelService.getAllHostels()
       setHostels(response.data || [])
     } catch (err) {
@@ -54,12 +54,10 @@ const AddRoom = () => {
     if (!value) return
 
     try {
-      // TODO: Verify endpoint returns correct floor data
       const response = await floorService.getFloorsByHostel(value)
       setFloors(response.data || [])
     } catch (err) {
       console.error('Failed to fetch floors:', err)
-      // Optionally show error for floor fetching if needed
       const errorData = err?.response?.data
       if (errorData?.message) {
         console.error('Floor fetch error:', errorData.message)
@@ -85,6 +83,7 @@ const AddRoom = () => {
     const newErrors = {}
     if (!formData.hostelId) newErrors.hostelId = 'Please select a hostel'
     if (!formData.floorId) newErrors.floorId = 'Please select a floor'
+    if (!formData.roomType) newErrors.roomType = 'Room type is required'
     if (!formData.roomNumber.trim()) newErrors.roomNumber = 'Room number is required'
     if (!formData.roomDetails.trim()) newErrors.roomDetails = 'Room details are required'
     if (!formData.totalBeds || formData.totalBeds <= 0) newErrors.totalBeds = 'Total beds must be greater than 0'
@@ -105,7 +104,6 @@ const AddRoom = () => {
     setApiError('')
 
     try {
-      // TODO: Verify endpoint and response structure from backend
       await roomService.createRoom(formData.hostelId, formData.floorId, {
         hostelId: formData.hostelId,
         floorId: formData.floorId,
@@ -114,6 +112,7 @@ const AddRoom = () => {
         totalBeds: parseInt(formData.totalBeds),
         availableBeds: parseInt(formData.availableBeds),
         isActive: formData.isActive,
+        roomType: formData.roomType,
       })
 
       // Success - redirect to dashboard
@@ -152,9 +151,8 @@ const AddRoom = () => {
   }))
 
   const roomTypeOptions = [
-    { value: 'STANDARD', label: 'Standard' },
-    { value: 'PREMIUM', label: 'Premium' },
-    { value: 'DELUXE', label: 'Deluxe' },
+    { value: 'PG_ROOM', label: 'PG Room' },
+    { value: 'FLAT', label: 'Flat' },
   ]
 
   return (
@@ -211,7 +209,22 @@ const AddRoom = () => {
                 />
               )}
 
-              {formData.floorId && (
+              {/* Room Type - Show when hostel is selected */}
+              {formData.hostelId && (
+                <FormSelect
+                  label="Room Type"
+                  name="roomType"
+                  value={formData.roomType}
+                  onChange={handleChange}
+                  options={roomTypeOptions}
+                  placeholder="Select room type"
+                  required
+                  error={errors.roomType}
+                />
+              )}
+
+              {/* Room Details Fields - Show when hostel, floor, and room type are selected */}
+              {formData.hostelId && formData.floorId && formData.roomType && (
                 <>
                   {/* Room Number */}
                   <FormInput
@@ -271,7 +284,8 @@ const AddRoom = () => {
                       onChange={e => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
                       className="mr-2"
                     />
-                    <label htmlFor="isActive" className="text-gray-700">Active Room</label>
+                    <label htmlFor="isActive" className="text-gray-700">Room is active</label>
+                    <p className="text-sm text-gray-500 ml-2">Inactive rooms stay visible but won't appear as active inventory.</p>
                   </div>
 
                   {/* Action Buttons */}
@@ -294,8 +308,6 @@ const AddRoom = () => {
               )}
             </form>
           )}
-
-          {/* TODO: Add room details summary or guidelines */}
         </div>
       </main>
     </div>
