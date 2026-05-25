@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Button, Field, NumericInput } from './ui'
+import { Button, Field, NumericInput, Alert } from './ui'
 import { otherChargeService } from '../services/otherChargeService'
 import { hostelService } from '../services/hostelService'
 
 export default function CreateOtherChargeModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [alert, setAlert] = useState(null) // { tone, message }
   const [hostels, setHostels] = useState([])
   const [rooms, setRooms] = useState([])
   const [tenants, setTenants] = useState([])
@@ -134,6 +135,7 @@ export default function CreateOtherChargeModal({ onClose, onSuccess }) {
     try {
       setLoading(true)
       setError('')
+      setAlert(null)
 
       const requestData = {
         chargeName: formData.chargeName.trim(),
@@ -153,7 +155,16 @@ export default function CreateOtherChargeModal({ onClose, onSuccess }) {
       }
 
       await otherChargeService.createCharge(requestData)
-      onSuccess()
+      
+      // Show success popup
+      setAlert({ tone: 'success', message: '✅ Charge Created Successfully! The charge has been added and tenants will be notified.' })
+      
+      // Auto-hide success message and close modal after 3 seconds
+      setTimeout(() => {
+        setAlert(null)
+        onSuccess()
+        onClose()
+      }, 3000)
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to create charge')
     } finally {
@@ -180,6 +191,22 @@ export default function CreateOtherChargeModal({ onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => {
+              setAlert(null)
+              onSuccess()
+              onClose()
+            }}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
+
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-slate-200">
           <div className="flex items-center justify-between">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import FormInput from '../../components/FormInput'
 import FormSelect from '../../components/FormSelect'
 import Button from '../../components/Button'
+import { Alert } from '../../components/ui'
 import { hostelService, floorService, roomService } from '../../services/hostelService'
 
 const AddRoom = () => {
@@ -23,6 +24,7 @@ const AddRoom = () => {
   const [loading, setLoading] = useState(false)
   const [fetchLoading, setFetchLoading] = useState(true)
   const [apiError, setApiError] = useState('')
+  const [alert, setAlert] = useState(null) // { tone, message }
 
   useEffect(() => {
     fetchHostels()
@@ -102,6 +104,7 @@ const AddRoom = () => {
 
     setLoading(true)
     setApiError('')
+    setAlert(null)
 
     try {
       await roomService.createRoom(formData.hostelId, formData.floorId, {
@@ -115,8 +118,14 @@ const AddRoom = () => {
         roomType: formData.roomType,
       })
 
-      // Success - redirect to dashboard
-      navigate('/owner/dashboard', { state: { message: 'Room added successfully!' } })
+      // Show success popup
+      setAlert({ tone: 'success', message: '✅ Room Added Successfully! Your room has been created and is ready for tenants.' })
+      
+      // Auto-hide success message and navigate after 3 seconds
+      setTimeout(() => {
+        setAlert(null)
+        navigate('/owner/dashboard', { state: { message: 'Room added successfully!' } })
+      }, 3000)
     } catch (error) {
       console.error('Failed to add room:', error)
       const errorData = error.response?.data
@@ -157,6 +166,18 @@ const AddRoom = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => setAlert(null)}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
+
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4">
@@ -172,7 +193,7 @@ const AddRoom = () => {
           ) : hostels.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-600 mb-4">No hostels available. Please create a hostel first.</p>
-              <Button label="Create Hostel" onClick={() => navigate('/owner/create-hostel')} />
+              <Button label="Create Hostel" onClick={() => navigate('/owner/hostels/create-hostel')} />
             </div>
           ) : (
             <form onSubmit={handleSubmit}>

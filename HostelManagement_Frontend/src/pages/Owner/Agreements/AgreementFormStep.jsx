@@ -297,7 +297,7 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
               className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="">Select a room</option>
-              {rooms.map((room) => (
+              {rooms.filter((room) => room.availableBeds > 0).map((room) => (
                 <option key={room.roomId} value={room.roomId}>
                   Room {room.roomNumber} ({room.availableBeds} beds available)
                 </option>

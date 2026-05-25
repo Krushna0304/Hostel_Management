@@ -32,5 +32,15 @@ public interface CashPaymentOtpRepository extends JpaRepository<CashPaymentOtp, 
         Instant now
     );
     
+    List<CashPaymentOtp> findAllBySettlementIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
+        String settlementId,
+        Instant now
+    );
+    
+    List<CashPaymentOtp> findAllByElectricityBillIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
+        UUID electricityBillId,
+        Instant now
+    );
+    
     void deleteByExpiryTimeBefore(Instant now);
 }

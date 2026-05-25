@@ -33,8 +33,8 @@ public class RoomAgreementPlanService {
 
     /**
      * Returns plans visible to the logged-in owner:
-     * - Global/system plans (ownerId is null)
-     * - Plans created by this owner
+     * - Global/system plans (ownerId is null) where isActive = true
+     * - Plans created by this owner where isActive = true
      *
      * @param planType optional filter — "PG_ROOM", "FLAT", or null (returns all)
      *                 "PG_ROOM" includes plans whose planType is PG_ROOM or absent/null (backward compat)
@@ -58,22 +58,22 @@ public class RoomAgreementPlanService {
         List<RoomAgreementPlan> plans = new ArrayList<>();
 
         if (resolvedPlanType == null) {
-            // No filter — return all active plans (existing behaviour)
-            plans.addAll(planRepository.findByOwnerIdIsNullAndStatus(PlanStatus.ACTIVE));
+            // No filter — return all active plans that are also isActive = true
+            plans.addAll(planRepository.findByOwnerIdIsNullAndStatusAndIsActive(PlanStatus.ACTIVE, true));
             if (owner != null) {
-                plans.addAll(planRepository.findByOwnerIdAndStatus(owner.getUserId(), PlanStatus.ACTIVE));
+                plans.addAll(planRepository.findByOwnerIdAndStatusAndIsActive(owner.getUserId(), PlanStatus.ACTIVE, true));
             }
         } else if (resolvedPlanType == PlanType.PG_ROOM) {
-            // PG_ROOM: include plans where planType = 'PG_ROOM' OR planType is absent/null
-            plans.addAll(planRepository.findGlobalActiveByPlanTypePgRoom(PlanStatus.ACTIVE));
+            // PG_ROOM: include plans where planType = 'PG_ROOM' OR planType is absent/null AND isActive = true
+            plans.addAll(planRepository.findGlobalActiveByPlanTypePgRoomAndIsActive(PlanStatus.ACTIVE, true));
             if (owner != null) {
-                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypePgRoom(owner.getUserId(), PlanStatus.ACTIVE));
+                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypePgRoomAndIsActive(owner.getUserId(), PlanStatus.ACTIVE, true));
             }
         } else {
-            // FLAT: include only plans where planType = 'FLAT'
-            plans.addAll(planRepository.findGlobalActiveByPlanTypeFlat(PlanStatus.ACTIVE));
+            // FLAT: include only plans where planType = 'FLAT' AND isActive = true
+            plans.addAll(planRepository.findGlobalActiveByPlanTypeFlatAndIsActive(PlanStatus.ACTIVE, true));
             if (owner != null) {
-                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypeFlat(owner.getUserId(), PlanStatus.ACTIVE));
+                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypeFlatAndIsActive(owner.getUserId(), PlanStatus.ACTIVE, true));
             }
         }
 
@@ -91,6 +91,7 @@ public class RoomAgreementPlanService {
 
     /**
      * Returns only plans created by the logged-in owner (for the Plans management page).
+     * Includes both active and inactive plans for management purposes.
      */
     public List<PlanResponse> getMyPlans() {
         User owner = ApplicationContext.getUser();
@@ -111,6 +112,61 @@ public class RoomAgreementPlanService {
     }
 
     /**
+     * Mark a plan as in use (inUseFlag = 1) when it's used in an agreement
+     */
+    public void markPlanAsInUse(String planId) {
+        RoomAgreementPlan plan = planRepository.findById(planId)
+                .orElseThrow(() -> new NotFoundException("Plan not found with ID: " + planId));
+        
+        plan.setInUseFlag(1);
+        planRepository.save(plan);
+    }
+
+    /**
+     * Update a plan owned by the logged-in owner.
+     * Only allows updates if the plan is not in use (inUseFlag = 0).
+     */
+    public PlanResponse updatePlan(String planId, CreatePlanRequest request) {
+        User owner = ApplicationContext.getUser();
+
+        RoomAgreementPlan plan = planRepository.findByIdAndOwnerId(planId, owner.getUserId())
+                .orElseThrow(() -> new UnauthorizedException("Plan not found or you don't have permission to edit it"));
+
+        // Check if plan is in use
+        if (plan.getInUseFlag() != null && plan.getInUseFlag() == 1) {
+            throw new IllegalStateException("Cannot edit plan that is currently in use by agreements");
+        }
+
+        // Update plan fields
+        plan.setPlanName(request.getPlanName());
+        plan.setPlanType(request.getPlanType().name());
+        plan.setRentDetails(request.getRentDetails());
+        plan.setDuration(request.getDuration());
+        plan.setPaymentModel(request.getPaymentModel());
+        plan.setCharges(request.getCharges());
+        plan.setFreeFacilities(request.getFreeFacilities());
+        plan.setLatePaymentPolicy(request.getLatePaymentPolicy());
+        plan.setRulesAndRegulations(request.getRulesAndRegulations());
+        plan.setRestrictions(request.getRestrictions());
+        plan.setAgreementCancellationRules(request.getAgreementCancellationRules());
+        plan.setLegal(request.getLegal());
+        plan.setCustomFields(request.getCustomFields());
+        
+        // Update audit info
+        if (plan.getAudit() != null) {
+            plan.getAudit().setUpdatedAt(Instant.now());
+        } else {
+            plan.setAudit(PlanAudit.builder()
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build());
+        }
+
+        RoomAgreementPlan updatedPlan = planRepository.save(plan);
+        return RoomAgreementPlanMapper.toDto(updatedPlan);
+    }
+
+    /**
      * Creates a new plan owned by the logged-in owner.
      */
     public PlanResponse createPlan(CreatePlanRequest request) {
@@ -121,6 +177,8 @@ public class RoomAgreementPlanService {
                 .planType(request.getPlanType().name())
                 .status(PlanStatus.ACTIVE)
                 .ownerId(owner.getUserId())
+                .inUseFlag(0) // New plan, not in use yet
+                .isActive(true) // New plan is active by default
                 .rentDetails(request.getRentDetails())
                 .duration(request.getDuration())
                 .paymentModel(request.getPaymentModel())
@@ -211,6 +269,8 @@ public class RoomAgreementPlanService {
 
     /**
      * Soft-deletes (deactivates) a plan owned by the logged-in owner.
+     * Sets isActive = false instead of changing status.
+     * Only allows deletion if the plan is not in use (inUseFlag = 0).
      */
     public void deletePlan(String planId) {
         User owner = ApplicationContext.getUser();
@@ -218,7 +278,47 @@ public class RoomAgreementPlanService {
         RoomAgreementPlan plan = planRepository.findByIdAndOwnerId(planId, owner.getUserId())
                 .orElseThrow(() -> new UnauthorizedException("Plan not found or you don't have permission to delete it"));
 
-        plan.setStatus(PlanStatus.INACTIVE);
+        // Check if plan is in use
+        if (plan.getInUseFlag() != null && plan.getInUseFlag() == 1) {
+            throw new IllegalStateException("Cannot delete plan that is currently in use by agreements");
+        }
+
+        // Set isActive to false instead of changing status
+        plan.setIsActive(false);
+        planRepository.save(plan);
+    }
+
+    /**
+     * Activates a plan owned by the logged-in owner.
+     * Sets isActive = true.
+     */
+    public void activatePlan(String planId) {
+        User owner = ApplicationContext.getUser();
+
+        RoomAgreementPlan plan = planRepository.findByIdAndOwnerId(planId, owner.getUserId())
+                .orElseThrow(() -> new UnauthorizedException("Plan not found or you don't have permission to activate it"));
+
+        plan.setIsActive(true);
+        planRepository.save(plan);
+    }
+
+    /**
+     * Deactivates a plan owned by the logged-in owner.
+     * Sets isActive = false.
+     * Only allows deactivation if the plan is not in use (inUseFlag = 0).
+     */
+    public void deactivatePlan(String planId) {
+        User owner = ApplicationContext.getUser();
+
+        RoomAgreementPlan plan = planRepository.findByIdAndOwnerId(planId, owner.getUserId())
+                .orElseThrow(() -> new UnauthorizedException("Plan not found or you don't have permission to deactivate it"));
+
+        // Check if plan is in use
+        if (plan.getInUseFlag() != null && plan.getInUseFlag() == 1) {
+            throw new IllegalStateException("Cannot deactivate plan that is currently in use by agreements");
+        }
+
+        plan.setIsActive(false);
         planRepository.save(plan);
     }
 }

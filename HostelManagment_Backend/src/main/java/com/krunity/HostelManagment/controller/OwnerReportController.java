@@ -15,6 +15,7 @@ import com.krunity.HostelManagment.repository.PaymentRequestScheduleRepository;
 import com.krunity.HostelManagment.repository.UserRepository;
 import com.krunity.HostelManagment.exception.NotFoundException;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/owner/reports")
 public class OwnerReportController {
@@ -50,11 +52,11 @@ public class OwnerReportController {
     public ResponseEntity<?> getCollectionSummary() {
         try {
             User owner = ApplicationContext.getUser();
-            System.out.println("Collections accessed by owner - ID: " + owner.getUserId() + ", Role: " + owner.getRole().getName());
+            log.debug("Collections accessed by owner - ID: {}, Role: {}", owner.getUserId(), owner.getRole().getName());
             
             // Verify user is an owner
             if (!"OWNER".equals(owner.getRole().getName())) {
-                System.out.println("Access denied - User is not an owner: " + owner.getRole().getName());
+                log.debug("Access denied - User is not an owner: {}", owner.getRole().getName());
                 return ResponseEntity.status(403).body("Access denied. Only owners can access this endpoint.");
             }
             
@@ -62,7 +64,7 @@ public class OwnerReportController {
                     tenantDashboardService.getOwnerCollectionSummary(owner.getUserId());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.out.println("Error in collections endpoint: " + e.getMessage());
+            log.debug("Error in collections endpoint: {}", e.getMessage());
             return ResponseEntity.status(500).body(e.getMessage());
         }
     }
@@ -103,12 +105,12 @@ public class OwnerReportController {
     public ResponseEntity<?> getTenantInstallments(@PathVariable String tenantId) {
         try {
             User owner = ApplicationContext.getUser();
-            System.out.println("Owner accessing installments - ID: " + owner.getUserId() + ", Role: " + owner.getRole().getName());
-            System.out.println("Requested tenant ID: " + tenantId);
+            log.debug("Owner accessing installments - ID: {}, Role: {}", owner.getUserId(), owner.getRole().getName());
+            log.debug("Requested tenant ID: {}", tenantId);
             
             // Verify user is an owner
             if (!"OWNER".equals(owner.getRole().getName())) {
-                System.out.println("Access denied - User is not an owner: " + owner.getRole().getName());
+                log.debug("Access denied - User is not an owner: {}", owner.getRole().getName());
                 return ResponseEntity.status(403).body("Access denied. Only owners can access this endpoint.");
             }
             
@@ -117,7 +119,7 @@ public class OwnerReportController {
             try {
                 tenantUuid = UUID.fromString(tenantId);
             } catch (IllegalArgumentException e) {
-                System.out.println("Invalid tenant ID format: " + tenantId);
+                log.debug("Invalid tenant ID format: {}", tenantId);
                 return ResponseEntity.badRequest().body("Invalid tenant ID format");
             }
             
@@ -125,9 +127,9 @@ public class OwnerReportController {
             TenantPaymentPlan plan = paymentPlanRepository.findByTenant_UserIdAndIsActiveTrue(tenantUuid)
                     .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"));
             
-            // Get pending/overdue installments
+            // Get pending/overdue installments ordered by priority (OVERDUE first, then PARTIALLY_PAID, then SCHEDULED)
             List<PaymentRequestSchedule> installments = scheduleRepository
-                    .findByTenantPaymentPlan_PlanIdAndPaymentStatusIn(
+                    .findByTenantPaymentPlan_PlanIdAndPaymentStatusInOrderByPriorityAndDueDate(
                         plan.getPlanId(), 
                         List.of(
                             com.krunity.HostelManagment.enums.TransactionStatus.SCHEDULED,
@@ -136,7 +138,7 @@ public class OwnerReportController {
                         )
                     );
             
-            System.out.println("Found " + installments.size() + " pending installments for tenant " + tenantId);
+            log.debug("Found {} pending installments for tenant {}", installments.size(), tenantId);
             
             // Convert entities to DTOs to avoid Hibernate lazy loading serialization issues
             List<InstallmentSummaryResponse> response = installments.stream()
@@ -145,8 +147,7 @@ public class OwnerReportController {
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.out.println("Error in getTenantInstallments: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error in getTenantInstallments for tenant {}", tenantId, e);
             return ResponseEntity.status(500).body(e.getMessage());
         }
     }
@@ -181,7 +182,7 @@ public class OwnerReportController {
             
             // Verify user is an owner
             if (!"OWNER".equals(owner.getRole().getName())) {
-                System.out.println("Access denied - User is not an owner: " + owner.getRole().getName());
+                log.debug("Access denied - User is not an owner: {}", owner.getRole().getName());
                 return ResponseEntity.status(403).body("Access denied. Only owners can collect payments.");
             }
             

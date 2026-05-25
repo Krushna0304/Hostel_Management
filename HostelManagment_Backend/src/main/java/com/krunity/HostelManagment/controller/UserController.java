@@ -4,6 +4,8 @@ import com.krunity.HostelManagment.dto.CreateUserRequest;
 import com.krunity.HostelManagment.dto.LoginRequest;
 import com.krunity.HostelManagment.dto.UpdateProfileRequest;
 import com.krunity.HostelManagment.dto.UserResponse;
+import com.krunity.HostelManagment.exception.AlreadyExistException;
+import com.krunity.HostelManagment.exception.NotFoundException;
 import com.krunity.HostelManagment.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/users")
+@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class UserController {
 
     //CURD operations for User
@@ -78,10 +81,18 @@ public class UserController {
 
     // Update profile (displayName, phoneNumber, optional password)
     @PatchMapping("/{username}/profile")
-    public ResponseEntity<UserResponse> updateProfile(
+    public ResponseEntity<?> updateProfile(
             @PathVariable String username,
             @RequestBody @Valid UpdateProfileRequest request) {
-        UserResponse userResponse = userService.updateProfile(username, request);
-        return ResponseEntity.ok(userResponse);
+        try {
+            UserResponse userResponse = userService.updateProfile(username, request);
+            return ResponseEntity.ok(userResponse);
+        } catch (NotFoundException e) {
+            return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
+        } catch (AlreadyExistException e) {
+            return ResponseEntity.status(409).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to update profile: " + e.getMessage()));
+        }
     }
 }

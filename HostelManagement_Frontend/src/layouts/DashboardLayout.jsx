@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import authService from '../services/authService'
+import { getUsernameFromToken } from '../services/profileService'
 import { ownerNavigation, tenantNavigation } from '../constants/navigation'
 import { useAuthState } from '../hooks/useAuthState'
 import {
@@ -13,6 +14,7 @@ import {
   DocumentIcon,
   HistoryIcon,
   HomeIcon,
+  LightningIcon,
   LogOutIcon,
   MenuIcon,
   ProfileIcon,
@@ -30,6 +32,7 @@ const iconMap = {
   document: DocumentIcon,
   'credit-card': CreditCardIcon,
   receipt: ReceiptIcon,
+  lightning: LightningIcon,
   profile: ProfileIcon,
   history: HistoryIcon,
   bell: BellIcon,
@@ -40,7 +43,11 @@ const titleMap = {
     title: 'Operations Dashboard',
     description: 'Track hostels, occupancy structure, and agreement activity from one place.',
   },
-  '/owner/create-hostel': {
+  '/owner/hostels': {
+    title: 'Your Hostels',
+    description: 'Manage all your hostel properties from one place.',
+  },
+  '/owner/hostels/create-hostel': {
     title: 'Create Hostel',
     description: 'Set up a new property with a clear, structured intake flow.',
   },
@@ -55,6 +62,14 @@ const titleMap = {
   '/owner/other-charges': {
     title: 'Other Charges',
     description: 'Manage additional charges and billing for tenants.',
+  },
+  '/owner/electricity-bills': {
+    title: 'Electricity Bills',
+    description: 'Manage electricity accounts, create bills, and track payments.',
+  },
+  '/owner/settlements': {
+    title: 'Settlement Requests',
+    description: 'Review and process agreement settlement requests from tenants.',
   },
   '/owner/plans': {
     title: 'Tenant Plans',
@@ -84,6 +99,14 @@ const titleMap = {
     title: 'My Other Charges',
     description: 'View and pay additional charges assigned to you.',
   },
+  '/tenant-portal/electricity-bills': {
+    title: 'My Electricity Bills',
+    description: 'View and pay your electricity bills.',
+  },
+  '/tenant-portal/settlements': {
+    title: 'Agreement Settlements',
+    description: 'Request and track agreement settlement processes.',
+  },
   '/tenant-portal/profile': {
     title: 'My Profile',
     description: 'Update your display name, phone number, or change your password.',
@@ -96,12 +119,33 @@ const titleMap = {
 
 function DashboardLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [userDisplayName, setUserDisplayName] = useState('')
   const location = useLocation()
   const { userRole } = useAuthState()
 
   const navigation = userRole === 'TENANT' ? tenantNavigation : ownerNavigation
   const workspaceLabel = userRole === 'TENANT' ? 'Tenant Portal' : 'Owner Control Center'
   const roleLabel = userRole ?? 'USER'
+
+  // Fetch user display name
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const username = getUsernameFromToken()
+        if (username) {
+          const response = await authService.getUser(username)
+          setUserDisplayName(response.data.displayName || username)
+        }
+      } catch (error) {
+        console.error('Failed to fetch user info:', error)
+        // Fallback to username from token
+        const username = getUsernameFromToken()
+        setUserDisplayName(username || 'User')
+      }
+    }
+
+    fetchUserInfo()
+  }, [userRole])
 
   const headerCopy = useMemo(() => {
     const entry = Object.entries(titleMap).find(([path]) => location.pathname.startsWith(path))
@@ -128,7 +172,7 @@ function DashboardLayout() {
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
           )}
         >
-          {/* Top: logo + workspace card — never scrolls */}
+          {/* Top: logo only — never scrolls */}
           <div className="shrink-0 p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -149,18 +193,18 @@ function DashboardLayout() {
                 <CloseIcon />
               </button>
             </div>
+          </div>
 
-            <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4">
+          {/* Middle: workspace card + nav links — scrolls independently */}
+          <nav className="sidebar-scroll flex-1 overflow-y-auto px-6 pb-2">
+            <div className="mb-6 rounded-3xl border border-white/10 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Workspace</p>
               <p className="mt-2 text-lg font-semibold text-white">Production-style property operations</p>
               <p className="mt-2 text-sm leading-6 text-slate-300">
                 Move between property setup, inventory, and agreement creation without losing context.
               </p>
             </div>
-          </div>
-
-          {/* Middle: nav links — scrolls independently */}
-          <nav className="sidebar-scroll flex-1 overflow-y-auto px-6 pb-2">
+            
             <div className="space-y-2">
               {navigation.map((item) => {
                 const Icon = iconMap[item.icon]
@@ -229,10 +273,12 @@ function DashboardLayout() {
               </div>
 
               <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm sm:flex">
-                <ArrowLeftIcon className="h-4 w-4 text-slate-400" />
+                {/* <ArrowLeftIcon className="h-4 w-4 text-slate-400" /> */}
                 <div className="text-right">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Role</p>
-                  <p className="text-sm font-semibold text-slate-700">{roleLabel}</p>
+                  {userDisplayName && (
+                    <p className="text-sm font-semibold text-slate-700">{userDisplayName}</p>
+                  )}
+                  <p className="text-xs text-slate-500 mt-0.5">{roleLabel}</p>
                 </div>
               </div>
             </div>

@@ -12,10 +12,12 @@ const CreateFloorPage = () => {
   const [floorNumber, setFloorNumber] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [alert, setAlert] = useState(null) // { tone, message }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
+    setAlert(null)
 
     if (!floorNumber || Number.isNaN(Number(floorNumber)) || Number(floorNumber) <= 0) {
       setError('Please enter a valid floor number.')
@@ -25,7 +27,15 @@ const CreateFloorPage = () => {
     setLoading(true)
     try {
       await floorService.createFloor(hostelId, { floorNumber: Number(floorNumber) })
-      navigate(`/owner/hostels/${hostelId}/floors`, { state: { hostelId, hostelName } })
+      
+      // Show success popup
+      setAlert({ tone: 'success', message: '✅ Floor Added Successfully! Your floor has been created and is ready for rooms.' })
+      
+      // Auto-hide success message and navigate after 3 seconds
+      setTimeout(() => {
+        setAlert(null)
+        navigate(`/owner/hostels/${hostelId}/floors`, { state: { hostelId, hostelName } })
+      }, 3000)
     } catch (err) {
       const errorData = err.response?.data
       if (errorData && typeof errorData === 'object' && !errorData.message) {
@@ -40,6 +50,21 @@ const CreateFloorPage = () => {
 
   return (
     <div className="space-y-8">
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => {
+              setAlert(null)
+              navigate(`/owner/hostels/${hostelId}/floors`, { state: { hostelId, hostelName } })
+            }}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
+
       <PageHeader
         eyebrow="Property setup"
         title={`Add a floor to ${hostelName}`}

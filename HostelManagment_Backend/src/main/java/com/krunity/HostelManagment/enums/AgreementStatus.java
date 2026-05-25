@@ -5,5 +5,7 @@ public enum AgreementStatus {
     PENDING_TENANT_ACTION,
     ACTIVE,
     REJECTED,
-    CLOSED
+    CLOSED,
+    SETTLEMENT_REQUESTED,
+    SETTLED
 }

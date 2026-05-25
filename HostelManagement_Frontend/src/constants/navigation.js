@@ -6,10 +6,10 @@ export const ownerNavigation = [
     description: 'Portfolio and performance',
   },
   {
-    label: 'Create Hostel',
-    to: '/owner/create-hostel',
+    label: 'Hostels',
+    to: '/owner/hostels',
     icon: 'building',
-    description: 'Add a new property',
+    description: 'Manage your properties',
   },
   {
     label: 'Agreements',
@@ -34,6 +34,18 @@ export const ownerNavigation = [
     to: '/owner/other-charges',
     icon: 'receipt',
     description: 'Additional charges & billing',
+  },
+  {
+    label: 'Electricity Bills',
+    to: '/owner/electricity-bills',
+    icon: 'lightning',
+    description: 'Electricity bill management',
+  },
+  {
+    label: 'Settlements',
+    to: '/owner/settlements',
+    icon: 'clipboard',
+    description: 'Agreement settlement requests',
   },
   {
     label: 'Payment Settings',
@@ -73,6 +85,18 @@ export const tenantNavigation = [
     to: '/tenant-portal/other-charges',
     icon: 'receipt',
     description: 'Additional charges & payments',
+  },
+  {
+    label: 'Electricity Bills',
+    to: '/tenant-portal/electricity-bills',
+    icon: 'lightning',
+    description: 'Electricity bill payments',
+  },
+  {
+    label: 'Settlements',
+    to: '/tenant-portal/settlements',
+    icon: 'clipboard',
+    description: 'Agreement settlement requests',
   },
   {
     label: 'Payment History',

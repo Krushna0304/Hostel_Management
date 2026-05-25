@@ -295,7 +295,7 @@ const PaymentSettings = () => {
                   variant="secondary"
                   className="flex-1"
                 >
-                  {testLoading ? 'Testing...' : '🔍 Test Connection'}
+                  {testLoading ? 'Testing...' : '🔍 Validate Credentials'}
                 </Button>
 
                 <Button

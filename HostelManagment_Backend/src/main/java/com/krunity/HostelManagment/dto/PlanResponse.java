@@ -10,6 +10,8 @@ public class PlanResponse {
     private String planType;
     private String planName;
     private PlanStatus status;
+    private Integer inUseFlag;
+    private Boolean isActive;
     private Duration duration;
     private PaymentModel paymentModel;
     private RentDetails rentDetails;

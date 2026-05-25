@@ -45,6 +45,31 @@ public class CashPaymentOtpController {
         }
     }
     
+    @PostMapping("/send-settlement/{settlementId}")
+    public ResponseEntity<?> sendSettlementOtp(@PathVariable String settlementId) {
+        try {
+            UUID settlementUuid = UUID.fromString(settlementId);
+            String message = otpService.generateAndSendSettlementOtp(settlementUuid.toString());
+            return ResponseEntity.ok(new OtpResponse(message));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new OtpResponse("Invalid settlement ID format"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new OtpResponse("Failed to send OTP: " + e.getMessage()));
+        }
+    }
+    
+    @PostMapping("/send-electricity/{billId}")
+    public ResponseEntity<?> sendElectricityOtp(@PathVariable String billId) {
+        try {
+            String message = otpService.generateAndSendElectricityOtp(billId);
+            return ResponseEntity.ok(new OtpResponse(message));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new OtpResponse("Invalid bill ID format"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(new OtpResponse("Failed to send OTP: " + e.getMessage()));
+        }
+    }
+    
     @PostMapping("/verify")
     public ResponseEntity<?> verifyOtp(@RequestBody VerifyOtpRequest request) {
         boolean isValid = otpService.verifyOtp(request.getAgreementId(), request.getOtp());

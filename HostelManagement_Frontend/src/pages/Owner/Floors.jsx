@@ -98,12 +98,6 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
         icon={<DoorIcon className="h-5 w-5" />}
         title="No rooms yet"
         description="Add the first room on this floor to begin managing bed inventory."
-        actionLabel="Add room"
-        onAction={() =>
-          navigate(`/owner/hostels/${hostelId}/floors/${floorId}/add-room`, {
-            state: { hostelId, floorId, hostelName, floorNumber },
-          })
-        }
       />
     )
   }
@@ -210,31 +204,52 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-base font-semibold text-slate-950">{tenant.tenantName || 'Unnamed tenant'}</p>
+                              {tenant.planId ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    navigate(`/owner/plans?planId=${tenant.planId}`)
+                                  }}
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                >
+                                  ({tenant.planName || 'Unnamed Plan'})
+                                </button>
+                              ) : (
+                                <span className="text-sm font-medium text-slate-600">
+                                  ({tenant.planName || 'No Plan'})
+                                </span>
+                              )}
                               {isFlat && (
                                 <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">
                                   Primary Tenant
                                 </span>
                               )}
                             </div>
-                            <p className="mt-1 text-sm text-slate-500">Room {selectedRoom.roomNumber}</p>
                           </div>
                           <Badge variant="success">{tenant.roomAllotmentStatus || 'ACTIVE'}</Badge>
                         </div>
                         
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Floor</p>
-                            <p className="mt-1 text-sm font-medium text-slate-900">Floor {floorNumber}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                              {isFlat ? 'Agreement Date' : 'Allotment Date'}
-                            </p>
-                            <p className="mt-1 text-sm font-medium text-slate-900">
+                        {/* Single line with all key information */}
+                        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-400">Start:</span>
+                            <span className="font-medium text-slate-900">
                               {tenant.allotmentDate ? new Date(tenant.allotmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                            </p>
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-400">End:</span>
+                            <span className="font-medium text-slate-900">
+                              {isFlat ? (tenant.agreementEndDate ? new Date(tenant.agreementEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Ongoing') : (tenant.agreementEndDate ? new Date(tenant.agreementEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Ongoing')}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-400">Mobile:</span>
+                            <span className="font-medium text-slate-900">{tenant.phoneNumber || '-'}</span>
                           </div>
                         </div>
 
@@ -279,7 +294,7 @@ const Floors = () => {
   const [floors, setFloors] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [expandedFloorId, setExpandedFloorId] = useState(null)
+  const [selectedFloorId, setSelectedFloorId] = useState(null)
 
   useEffect(() => {
     const fetchFloors = async () => {
@@ -287,7 +302,12 @@ const Floors = () => {
       setError('')
       try {
         const response = await floorService.getFloorsByHostel(hostelId)
-        setFloors(response.data || [])
+        const floorsData = response.data || []
+        setFloors(floorsData)
+        // Select first floor by default if no floor is selected
+        if (floorsData.length > 0 && !selectedFloorId) {
+          setSelectedFloorId(floorsData[0].floorId)
+        }
       } catch (err) {
         setError(err?.response?.data?.message || 'Failed to load floors.')
       } finally {
@@ -297,9 +317,18 @@ const Floors = () => {
     fetchFloors()
   }, [hostelId])
 
-  const toggleFloor = (floorId) => {
-    setExpandedFloorId((prev) => (prev === floorId ? null : floorId))
+  // Update selected floor when floors change and no floor is selected
+  useEffect(() => {
+    if (floors.length > 0 && !selectedFloorId) {
+      setSelectedFloorId(floors[0].floorId)
+    }
+  }, [floors, selectedFloorId])
+
+  const selectFloor = (floorId) => {
+    setSelectedFloorId(floorId)
   }
+
+  const selectedFloor = floors.find(floor => floor.floorId === selectedFloorId)
 
   return (
     <div className="space-y-8">
@@ -318,17 +347,37 @@ const Floors = () => {
           />
         }
         secondaryAction={
-          <Button label="Back" variant="secondary" onClick={() => navigate('/owner/dashboard')} />
+          <Button label="Back" variant="secondary" onClick={() => navigate('/owner/hostels')} />
         }
       />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
 
       {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 rounded-3xl" />
-          ))}
+        <div className="space-y-6">
+          {/* Floor tabs skeleton */}
+          <Card>
+            <CardHeader title="Floors" description="Select a floor to view its rooms." />
+            <CardContent>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-32 rounded-2xl flex-shrink-0" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Rooms skeleton */}
+          <Card>
+            <CardHeader title="Rooms" />
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-32 rounded-2xl" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       ) : floors.length === 0 ? (
         <EmptyState
@@ -343,89 +392,91 @@ const Floors = () => {
           }
         />
       ) : (
-        <Card>
-          <CardHeader
-            title="Floors"
-            description="Click any floor to expand its rooms. Click again to collapse."
-          />
-          <CardContent>
-            <div className="space-y-3">
-              {floors.map((floor) => {
-                const isOpen = expandedFloorId === floor.floorId
-                return (
-                  <div
-                    key={floor.floorId}
-                    className={`overflow-hidden rounded-3xl border transition-colors duration-200 ${
-                      isOpen
-                        ? 'border-sky-200 bg-sky-50/40'
-                        : 'border-slate-200 bg-slate-50/80'
-                    }`}
-                  >
-                    {/* Floor header row — click to toggle */}
-                    <div className="flex w-full items-center justify-between gap-4 px-5 py-4">
-                      <button
-                        type="button"
-                        onClick={() => toggleFloor(floor.floorId)}
-                        className="flex flex-1 items-center gap-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500/50 rounded-lg"
-                      >
-                        <div className={`rounded-2xl p-3 shadow-sm transition-colors ${isOpen ? 'bg-sky-100 text-sky-700' : 'bg-white text-slate-700'}`}>
-                          <LayersIcon className="h-5 w-5" />
+        <div className="space-y-6">
+          {/* Floors Section - Horizontal Layout */}
+          <Card>
+            <CardHeader
+              title="Floors"
+              description="Select a floor to view its rooms."
+            />
+            <CardContent className="pt-0 pb-5">
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {floors.map((floor) => {
+                  const isSelected = selectedFloorId === floor.floorId
+                  return (
+                    <button
+                      key={floor.floorId}
+                      type="button"
+                      onClick={() => selectFloor(floor.floorId)}
+                      className={`flex-shrink-0 rounded-2xl border-2 p-4 text-left transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 ${
+                        isSelected
+                          ? 'border-sky-500 bg-sky-50 shadow-md'
+                          : 'border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`rounded-xl p-2 shadow-sm transition-colors ${
+                          isSelected ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          <LayersIcon className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Floor</p>
-                          <h3 className="mt-0.5 text-lg font-semibold text-slate-950">
+                          <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${
+                            isSelected ? 'text-sky-600' : 'text-slate-400'
+                          }`}>
+                            Floor
+                          </p>
+                          <h3 className={`mt-0.5 text-base font-semibold ${
+                            isSelected ? 'text-sky-900' : 'text-slate-950'
+                          }`}>
                             Floor {floor.floorNumber}
                           </h3>
                         </div>
-                      </button>
-
-                      <div className="flex items-center gap-3">
-                        {/* Add room shortcut — only visible when expanded */}
-                        {isOpen && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigate(
-                                `/owner/hostels/${hostelId}/floors/${floor.floorId}/add-room`,
-                                { state: { hostelId, floorId: floor.floorId, hostelName, floorNumber: floor.floorNumber } }
-                              )
-                            }}
-                            className="rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                          >
-                            + Add room
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => toggleFloor(floor.floorId)}
-                          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 rounded-lg p-1"
-                        >
-                          {isOpen
-                            ? <ChevronUp className="h-5 w-5 text-sky-500" />
-                            : <ChevronDown className="h-5 w-5 text-slate-400" />
-                          }
-                        </button>
                       </div>
-                    </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
-                    {/* Rooms panel — shown when floor is expanded */}
-                    {isOpen && (
-                      <div className="border-t border-sky-100 px-5 pb-5 pt-4">
-                        <RoomPanel
-                          hostelId={hostelId}
-                          hostelName={hostelName}
-                          floorId={floor.floorId}
-                          floorNumber={floor.floorNumber}
-                          navigate={navigate}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
+          {/* Rooms Section */}
+          {selectedFloor && (
+            <Card>
+              <CardHeader
+                title={`Floor ${selectedFloor.floorNumber} - Rooms`}
+                description={`Rooms on Floor ${selectedFloor.floorNumber}`}
+                action={
+                  <Button
+                    label="Add room"
+                    onClick={() => {
+                      navigate(
+                        `/owner/hostels/${hostelId}/floors/${selectedFloor.floorId}/add-room`,
+                        { 
+                          state: { 
+                            hostelId, 
+                            floorId: selectedFloor.floorId, 
+                            hostelName, 
+                            floorNumber: selectedFloor.floorNumber 
+                          } 
+                        }
+                      )
+                    }}
+                  />
+                }
+              />
+              <CardContent className="pt-0">
+                <RoomPanel
+                  hostelId={hostelId}
+                  hostelName={hostelName}
+                  floorId={selectedFloor.floorId}
+                  floorNumber={selectedFloor.floorNumber}
+                  navigate={navigate}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   )

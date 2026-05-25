@@ -8,6 +8,8 @@ const agreementService = {
   acceptAgreement: (agreementId, data) => apiClient.post(`/api/agreements/${agreementId}/accept`, data),
   rejectAgreement: (agreementId) => apiClient.post(`/api/agreements/${agreementId}/reject`),
   getAllAgreements: () => apiClient.get("/api/agreements"),
+  getAgreementCards: () => apiClient.get("/api/agreements/cards"),
+  getAgreementById: (agreementId) => apiClient.get(`/api/agreements/${agreementId}`),
   getActivePlans: (planType) => apiClient.get(planType ? `/api/plans/active?planType=${planType}` : "/api/plans/active"),
   getPlanById: (planId) => apiClient.get(`/api/plans/${planId}`),
 };
@@ -15,7 +17,10 @@ const agreementService = {
 export const planService = {
   getMyPlans: () => apiClient.get("/api/plans/my"),
   createPlan: (data) => apiClient.post("/api/plans", data),
+  updatePlan: (planId, data) => apiClient.put(`/api/plans/${planId}`, data),
   deletePlan: (planId) => apiClient.delete(`/api/plans/${planId}`),
+  activatePlan: (planId) => apiClient.post(`/api/plans/${planId}/activate`),
+  deactivatePlan: (planId) => apiClient.post(`/api/plans/${planId}/deactivate`),
   getPaymentBreakdown: (planId) => apiClient.get(`/api/plans/${planId}/payment-breakdown`),
   getEnhancedBreakdown: (planId) => apiClient.get(`/api/plans/${planId}/enhanced-breakdown`),
   calculateInstallments: (data) => apiClient.post("/api/plans/calculate-installments", data),
@@ -26,6 +31,7 @@ export const tenantService = {
   getPaymentSchedule: () => apiClient.get("/tenant/payment-schedule"),
   recordPayment: (scheduleId, data) => apiClient.post(`/tenant/pay/${scheduleId}`, data),
   getMyAgreement: () => apiClient.get("/tenant/agreement"),
+  getTenantAgreements: () => apiClient.get("/tenant/agreements"),
 };
 
 export const ownerReportService = {

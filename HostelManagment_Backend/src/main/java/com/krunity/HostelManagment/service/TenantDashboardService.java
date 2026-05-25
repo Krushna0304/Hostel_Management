@@ -43,9 +43,9 @@ public class TenantDashboardService {
         TenantPaymentPlan plan = paymentPlanRepository.findByTenant_UserIdAndIsActiveTrue(tenantId)
                 .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"));
 
-        // Get all schedules
+        // Get all schedules ordered by installment number
         List<PaymentRequestSchedule> schedules =
-                scheduleRepository.findByTenantPaymentPlan_PlanId(plan.getPlanId());
+                scheduleRepository.findByTenantPaymentPlan_PlanIdOrderByInstallmentNumber(plan.getPlanId());
 
         long totalPaid = schedules.stream()
                 .filter(s -> s.getPaymentStatus() == TransactionStatus.COMPLETED)
@@ -122,7 +122,7 @@ public class TenantDashboardService {
             if (plan == null) continue;
 
             List<PaymentRequestSchedule> schedules =
-                    scheduleRepository.findByTenantPaymentPlan_PlanId(plan.getPlanId());
+                    scheduleRepository.findByTenantPaymentPlan_PlanIdOrderByInstallmentNumber(plan.getPlanId());
 
             long tenantPaid = schedules.stream()
                     .filter(s -> s.getPaymentStatus() == TransactionStatus.COMPLETED)

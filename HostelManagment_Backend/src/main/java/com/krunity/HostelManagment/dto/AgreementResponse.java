@@ -34,5 +34,14 @@ public class AgreementResponse {
     
     // Complete plan snapshot with all details
     private RoomAgreementPlan planSnapshot;
+    
+    // Tenant details
+    private String tenantName;
+    private String tenantMobileNumber;
+    
+    // Location details
+    private String hostelName;
+    private String roomNumber;
+    private Integer floorNumber;
 }
 

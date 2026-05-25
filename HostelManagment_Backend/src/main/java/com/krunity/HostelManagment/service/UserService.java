@@ -49,7 +49,7 @@ public class UserService {
             throw new AlreadyExistException("Username already exists");
 
         if (userRepository.existsByPhoneNumber(createUserRequest.getPhoneNumber()))
-            throw new AlreadyExistException("PhoneNumber already exists");
+            throw new AlreadyExistException("Phone Number already exists");
 
         Role role = roleRepository.findByName(createUserRequest.getRole())
                 .orElseThrow(() -> new NotFoundException("Role not found"));

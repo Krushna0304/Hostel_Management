@@ -8,10 +8,12 @@ import com.krunity.HostelManagment.repository.AgreementRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
 import java.util.List;
 
+@Slf4j
 @Service
 public class AgreementMigrationService {
 
@@ -57,19 +59,18 @@ public class AgreementMigrationService {
                                 paymentPlanRepository.save(plan);
                                 fixedCount++;
                                 
-                                System.out.println("Fixed agreement " + agreement.getId() + 
-                                    ": End date changed from " + oldEndDate + " to " + correctEndDate +
-                                    " (Duration: " + durationValue + " " + durationUnit + ")");
+                                log.info("Fixed agreement {}: End date changed from {} to {} (Duration: {} {})",
+                                    agreement.getId(), oldEndDate, correctEndDate, durationValue, durationUnit);
                             }
                         }
                     }
                 } catch (Exception e) {
-                    System.err.println("Failed to fix agreement " + plan.getAgreementId() + ": " + e.getMessage());
+                    log.error("Failed to fix agreement {}: {}", plan.getAgreementId(), e.getMessage());
                 }
             }
         }
         
-        System.out.println("Agreement end date migration completed. Fixed " + fixedCount + " agreements.");
+        log.info("Agreement end date migration completed. Fixed {} agreements.", fixedCount);
     }
 
     /**
@@ -80,19 +81,19 @@ public class AgreementMigrationService {
         try {
             Agreement agreement = agreementRepository.findById(agreementId).orElse(null);
             if (agreement == null) {
-                System.err.println("Agreement not found: " + agreementId);
+                log.error("Agreement not found: {}", agreementId);
                 return false;
             }
 
             TenantPaymentPlan plan = paymentPlanRepository.findByAgreementId(agreementId).orElse(null);
             if (plan == null) {
-                System.err.println("Payment plan not found for agreement: " + agreementId);
+                log.error("Payment plan not found for agreement: {}", agreementId);
                 return false;
             }
 
             RoomAgreementPlan planSnapshot = agreement.getPlanSnapshot();
             if (planSnapshot == null || planSnapshot.getDuration() == null) {
-                System.err.println("No plan snapshot or duration found for agreement: " + agreementId);
+                log.error("No plan snapshot or duration found for agreement: {}", agreementId);
                 return false;
             }
 
@@ -111,13 +112,12 @@ public class AgreementMigrationService {
             plan.setEndDate(correctEndDate);
             paymentPlanRepository.save(plan);
 
-            System.out.println("Fixed agreement " + agreementId + 
-                ": End date changed from " + oldEndDate + " to " + correctEndDate +
-                " (Duration: " + durationValue + " " + durationUnit + ")");
+            log.info("Fixed agreement {}: End date changed from {} to {} (Duration: {} {})",
+                agreementId, oldEndDate, correctEndDate, durationValue, durationUnit);
             
             return true;
         } catch (Exception e) {
-            System.err.println("Failed to fix agreement " + agreementId + ": " + e.getMessage());
+            log.error("Failed to fix agreement {}: {}", agreementId, e.getMessage());
             return false;
         }
     }

@@ -13,6 +13,7 @@ const CreateHostel = () => {
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [apiError, setApiError] = useState('')
+  const [alert, setAlert] = useState(null) // { tone, message }
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -41,6 +42,7 @@ const CreateHostel = () => {
 
     setLoading(true)
     setApiError('')
+    setAlert(null)
 
     try {
       await hostelService.createHostel({
@@ -48,7 +50,14 @@ const CreateHostel = () => {
         hostelAddress: formData.hostelAddress,
       })
 
-      navigate('/owner/dashboard', { state: { message: 'Hostel created successfully.' } })
+      // Show success popup
+      setAlert({ tone: 'success', message: '✅ Hostel Added Successfully! Your hostel has been created and is ready for setup.' })
+      
+      // Auto-hide success message and navigate after 3 seconds
+      setTimeout(() => {
+        setAlert(null)
+        navigate('/owner/hostels', { state: { message: 'Hostel created successfully.' } })
+      }, 3000)
     } catch (error) {
       const errorData = error.response?.data
 
@@ -90,6 +99,18 @@ const CreateHostel = () => {
         description="Capture the property name and address first. Floors and rooms can be added immediately after creation from the workspace."
         secondaryAction={<Button label="Back to dashboard" variant="secondary" onClick={() => navigate('/owner/dashboard')} />}
       />
+
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => setAlert(null)}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
@@ -133,7 +154,7 @@ const CreateHostel = () => {
                 <Button
                   type="button"
                   label="Cancel"
-                  onClick={() => navigate('/owner/dashboard')}
+                  onClick={() => navigate('/owner/hostels')}
                   variant="secondary"
                   fullWidth
                 />

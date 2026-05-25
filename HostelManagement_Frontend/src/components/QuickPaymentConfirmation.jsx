@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Swal from 'sweetalert2'
 import { ownerReportService } from '../services/agreementService'
 import { Button } from './ui'
 
@@ -9,19 +10,53 @@ export default function QuickPaymentConfirmation({ tenant, nextInstallment, onCl
   const handlePaymentConfirm = async (paymentMode) => {
     if (!nextInstallment) return
 
+    const modeLabel = paymentMode === 'CASH' ? '💵 Cash' : '💳 Online'
+    const totalAmount = nextInstallment.amount + nextInstallment.lateFeeApplied - nextInstallment.paidAmount
+
+    // SweetAlert2 confirmation
+    const result = await Swal.fire({
+      title: 'Confirm Collection',
+      html: `
+        <div style="text-align:left;font-size:15px;">
+          <p style="margin-bottom:8px;">Tenant: <strong>${tenant.tenantName}</strong></p>
+          <p style="margin-bottom:8px;">Installment: <strong>#${nextInstallment.installmentNumber}</strong></p>
+          <p style="margin-bottom:8px;">Amount: <strong>₹${totalAmount.toLocaleString()}</strong></p>
+          <p>Mode: <strong>${modeLabel}</strong></p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Confirm',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#0f172a',
+      cancelButtonColor: '#94a3b8',
+    })
+
+    if (!result.isConfirmed) return
+
     try {
       setProcessing(true)
       setError('')
 
       const paymentData = {
-        amount: nextInstallment.amount + nextInstallment.lateFeeApplied - nextInstallment.paidAmount,
+        amount: totalAmount,
         paymentMode: paymentMode,
         // For cash payments, we'll skip OTP for owner collections (trusted source)
         otp: paymentMode === 'CASH' ? 'OWNER_COLLECTION' : null,
       }
 
       await ownerReportService.collectPayment(nextInstallment.scheduleId, paymentData)
-      
+
+      await Swal.fire({
+        title: 'Payment Collected! 🎉',
+        html: `<p>Installment <strong>#${nextInstallment.installmentNumber}</strong> of <strong>₹${totalAmount.toLocaleString()}</strong> collected from <strong>${tenant.tenantName}</strong>.</p>`,
+        icon: 'success',
+        confirmButtonText: 'Done',
+        confirmButtonColor: '#0f172a',
+        timer: 3000,
+        timerProgressBar: true,
+      })
+
       onSuccess?.()
       onClose()
     } catch (err) {

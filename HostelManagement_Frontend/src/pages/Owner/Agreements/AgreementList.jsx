@@ -50,6 +50,33 @@ function AgreementDetailModal({ agreement, onClose }) {
         </div>
 
         <div className="space-y-4">
+          {/* Tenant and Location Information */}
+          <div className="rounded-2xl bg-blue-50 border border-blue-200 p-4">
+            <p className="text-sm font-semibold text-blue-900 mb-3">👤 Tenant & Location Details</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-xl bg-white border border-blue-200 px-3 py-2">
+                <p className="text-xs uppercase tracking-[0.15em] text-blue-500">Tenant Name</p>
+                <p className="mt-1 font-semibold text-blue-900">{agreement.tenantName || 'Not available'}</p>
+              </div>
+              <div className="rounded-xl bg-white border border-blue-200 px-3 py-2">
+                <p className="text-xs uppercase tracking-[0.15em] text-blue-500">Mobile Number</p>
+                <p className="mt-1 font-semibold text-blue-900">{agreement.tenantMobileNumber || 'Not available'}</p>
+              </div>
+              <div className="rounded-xl bg-white border border-blue-200 px-3 py-2">
+                <p className="text-xs uppercase tracking-[0.15em] text-blue-500">Hostel</p>
+                <p className="mt-1 font-semibold text-blue-900">{agreement.hostelName || 'Not available'}</p>
+              </div>
+              <div className="rounded-xl bg-white border border-blue-200 px-3 py-2">
+                <p className="text-xs uppercase tracking-[0.15em] text-blue-500">Room & Floor</p>
+                <p className="mt-1 font-semibold text-blue-900">
+                  {agreement.roomNumber && agreement.floorNumber 
+                    ? `Room ${agreement.roomNumber}, Floor ${agreement.floorNumber}`
+                    : 'Not available'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-slate-50 px-4 py-3">
@@ -501,6 +528,7 @@ export default function AgreementList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedAgreement, setSelectedAgreement] = useState(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
 
   useEffect(() => {
     fetchAgreements()
@@ -510,13 +538,36 @@ export default function AgreementList() {
     try {
       setLoading(true)
       setError('')
-      const response = await agreementService.getAllAgreements()
-      setAgreements(response.data || [])
+      const response = await agreementService.getAgreementCards()
+      const agreementsData = response.data || []
+      
+      // Sort agreements by updated date in descending order (most recent first)
+      const sortedAgreements = agreementsData.sort((a, b) => {
+        // Use activatedAt, then createdAt as fallback for sorting
+        const dateA = new Date(a.activatedAt || a.createdAt || 0)
+        const dateB = new Date(b.activatedAt || b.createdAt || 0)
+        return dateB - dateA // Descending order
+      })
+      
+      setAgreements(sortedAgreements)
     } catch (err) {
       const errorData = err?.response?.data
       setError(errorData?.message || 'Failed to load agreements.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleCardClick = async (agreementCard) => {
+    try {
+      setLoadingDetails(true)
+      const response = await agreementService.getAgreementById(agreementCard.id)
+      setSelectedAgreement(response.data)
+    } catch (err) {
+      console.error('Failed to load agreement details:', err)
+      setError('Failed to load agreement details.')
+    } finally {
+      setLoadingDetails(false)
     }
   }
 
@@ -583,88 +634,21 @@ export default function AgreementList() {
           <CardContent>
             <div className="grid gap-4 xl:grid-cols-2">
               {agreements.map((agreement) => {
-                // Calculate agreement end date
-                const getAgreementEndDate = (agreement) => {
-                  if (!agreement.startDate || !agreement.planSnapshot?.duration) return null
-                  
-                  const startDate = new Date(agreement.startDate)
-                  const duration = agreement.planSnapshot.duration
-                  
-                  if (duration.unit === 'MONTH') {
-                    const endDate = new Date(startDate)
-                    endDate.setMonth(endDate.getMonth() + duration.value)
-                    return endDate
-                  } else if (duration.unit === 'YEAR') {
-                    const endDate = new Date(startDate)
-                    endDate.setFullYear(endDate.getFullYear() + duration.value)
-                    return endDate
-                  }
-                  return null
-                }
-
-                // Calculate proper rent and deposit from plan snapshot
-                const getPlanFinancials = (agreement) => {
-                  const plan = agreement.planSnapshot
-                  if (!plan) {
-                    return {
-                      monthlyRent: agreement.rent || 0,
-                      securityDeposit: agreement.deposit || 0,
-                      installmentAmount: agreement.rent || 0,
-                      planName: 'Legacy Plan'
-                    }
-                  }
-
-                  const baseRent = Number(plan.rentDetails?.monthlyRent) || 0
-                  const securityDeposit = Number(plan.charges?.securityDeposit?.amount) || 0
-                  
-                  // Calculate recurring charges
-                  const monthlyCleaning = Number(plan.charges?.cleaningCharges?.monthlyCleaningCharge?.amount) || 0
-                  const monthlyMaintenance = Number(plan.charges?.maintenanceCharges?.monthlyMaintenanceCharge?.amount) || 0
-                  const electricity = Number(plan.charges?.utilityCharges?.electricity?.fixedAmount) || 0
-                  const water = Number(plan.charges?.utilityCharges?.water?.monthlyAmount) || 0
-                  
-                  // Calculate custom recurring charges
-                  const customMonthlyRecurringCharges = (plan.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
-                    return total + (Number(charge.amount) || 0)
-                  }, 0)
-
-                  const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
-                  const monthlyTotal = baseRent + recurringCharges
-
-                  // Calculate installment amount
-                  const totalDuration = Number(plan.duration?.value) || 12
-                  const numberOfInstallments = Number(plan.paymentModel?.installments) || 1
-                  const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
-                  const installmentAmount = monthlyTotal * monthsPerInstallment
-
-                  return {
-                    monthlyRent: monthlyTotal,
-                    securityDeposit: securityDeposit,
-                    installmentAmount: installmentAmount,
-                    planName: plan.planName || 'Unnamed Plan',
-                    numberOfInstallments: numberOfInstallments,
-                    paymentTiming: plan.paymentModel?.paymentTiming || 'PREPAID'
-                  }
-                }
-
-                const endDate = getAgreementEndDate(agreement)
-                const financials = getPlanFinancials(agreement)
-
                 return (
                   <div
                     key={agreement.id}
                     className="cursor-pointer rounded-3xl border border-slate-200 bg-slate-50/80 p-5 transition hover:border-slate-300 hover:shadow-md"
-                    onClick={() => setSelectedAgreement(agreement)}
+                    onClick={() => handleCardClick(agreement)}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Agreement</p>
                         <h3 className="mt-2 text-xl font-semibold text-slate-950">{agreement.type} agreement</h3>
-                        <p className="mt-1 text-sm font-medium text-blue-600">{financials.planName}</p>
+                        <p className="mt-1 text-sm font-medium text-blue-600">{agreement.planName}</p>
                         {/* Duration Display */}
-                        {agreement.planSnapshot?.duration && (
+                        {agreement.planDurationValue && agreement.planDurationUnit && (
                           <p className="mt-1 text-sm text-slate-600">
-                            Duration: {agreement.planSnapshot.duration.value} {agreement.planSnapshot.duration.unit.toLowerCase()}{agreement.planSnapshot.duration.value > 1 ? 's' : ''}
+                            Duration: {agreement.planDurationValue} {agreement.planDurationUnit.toLowerCase()}{agreement.planDurationValue > 1 ? 's' : ''}
                           </p>
                         )}
                       </div>
@@ -676,20 +660,20 @@ export default function AgreementList() {
                     <div className="mt-5 grid gap-4 sm:grid-cols-2">
                       <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
                         <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                          {financials.numberOfInstallments > 1 ? 'Installment Amount' : 'Monthly Rent'}
+                          {agreement.numberOfInstallments > 1 ? 'Installment Amount' : 'Monthly Rent'}
                         </p>
                         <p className="mt-2 text-lg font-semibold text-slate-950">
-                          ₹{financials.numberOfInstallments > 1 ? financials.installmentAmount.toLocaleString() : financials.monthlyRent.toLocaleString()}
+                          ₹{agreement.numberOfInstallments > 1 ? agreement.installmentAmount?.toLocaleString() : agreement.monthlyRent?.toLocaleString()}
                         </p>
-                        {financials.numberOfInstallments > 1 && (
+                        {agreement.numberOfInstallments > 1 && (
                           <p className="text-xs text-slate-500 mt-1">
-                            {financials.numberOfInstallments} installments · {financials.paymentTiming}
+                            {agreement.numberOfInstallments} installments · {agreement.paymentTiming}
                           </p>
                         )}
                       </div>
                       <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
                         <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Security Deposit</p>
-                        <p className="mt-2 text-lg font-semibold text-green-700">₹{financials.securityDeposit.toLocaleString()}</p>
+                        <p className="mt-2 text-lg font-semibold text-green-700">₹{agreement.securityDeposit?.toLocaleString()}</p>
                         <p className="text-xs text-green-600 mt-1">Refundable</p>
                       </div>
                     </div>
@@ -700,12 +684,27 @@ export default function AgreementList() {
                           <p><span className="font-semibold text-slate-900">Start date:</span></p>
                           <p className="text-slate-700">{formatDate(agreement.startDate)}</p>
                         </div>
-                        {endDate && (
-                          <div>
-                            <p><span className="font-semibold text-slate-900">End date:</span></p>
-                            <p className="text-slate-700">{formatDate(endDate)}</p>
-                          </div>
-                        )}
+                        <div>
+                          <p><span className="font-semibold text-slate-900">End date:</span></p>
+                          <p className="text-slate-700">
+                            {(() => {
+                              if (!agreement.startDate || !agreement.planDurationValue || !agreement.planDurationUnit) return 'N/A'
+                              
+                              const startDate = new Date(agreement.startDate)
+                              
+                              if (agreement.planDurationUnit === 'MONTH') {
+                                const endDate = new Date(startDate)
+                                endDate.setMonth(endDate.getMonth() + agreement.planDurationValue)
+                                return formatDate(endDate)
+                              } else if (agreement.planDurationUnit === 'YEAR') {
+                                const endDate = new Date(startDate)
+                                endDate.setFullYear(endDate.getFullYear() + agreement.planDurationValue)
+                                return formatDate(endDate)
+                              }
+                              return 'N/A'
+                            })()}
+                          </p>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -729,7 +728,9 @@ export default function AgreementList() {
                       </div>
                     )}
 
-                    <p className="mt-4 text-xs text-slate-400 text-right">Click to view full details →</p>
+                    <p className="mt-4 text-xs text-slate-400 text-right">
+                      {loadingDetails ? 'Loading details...' : 'Click to view full details →'}
+                    </p>
                   </div>
                 )
               })}

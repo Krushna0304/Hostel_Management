@@ -183,14 +183,19 @@ export default function PaymentHistoryModal({ tenantName, ledger: initialLedger,
     }
   }
 
-  // Filter installments
-  const filtered = (ledger?.installments ?? []).filter((inst) => {
-    if (filter === 'ALL')       return true
-    if (filter === 'COMPLETED') return inst.paymentStatus === 'COMPLETED'
-    if (filter === 'OVERDUE')   return inst.paymentStatus === 'OVERDUE'
-    if (filter === 'PENDING')   return inst.paymentStatus === 'SCHEDULED' || inst.paymentStatus === 'PARTIALLY_PAID'
-    return true
-  })
+  // Filter and sort installments
+  const filtered = (ledger?.installments ?? [])
+    .filter((inst) => {
+      if (filter === 'ALL')       return true
+      if (filter === 'COMPLETED') return inst.paymentStatus === 'COMPLETED'
+      if (filter === 'OVERDUE')   return inst.paymentStatus === 'OVERDUE'
+      if (filter === 'PENDING')   return inst.paymentStatus === 'SCHEDULED' || inst.paymentStatus === 'PARTIALLY_PAID'
+      return true
+    })
+    .sort((a, b) => {
+      // Sort by installment number (1, 2, 3, ...)
+      return a.installmentNumber - b.installmentNumber
+    })
 
   // Counts for filter tabs
   const counts = (ledger?.installments ?? []).reduce((acc, inst) => {

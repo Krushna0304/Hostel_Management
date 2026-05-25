@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Swal from 'sweetalert2'
 import apiClient from '../services/apiClient'
 import FormInput from './FormInput'
 import { Alert, Button } from './ui'
@@ -51,10 +52,32 @@ export default function PaymentModal({
         setError('Please enter the OTP provided by the owner.')
         return
       }
-      // Cash payment — confirm with OTP
+    }
+
+    // SweetAlert2 confirmation before proceeding
+    const result = await Swal.fire({
+      title: 'Confirm Payment',
+      html: `
+        <div style="text-align:left;font-size:15px;">
+          <p style="margin-bottom:8px;"><strong>Installment #${installmentNumber}</strong></p>
+          <p style="margin-bottom:8px;">Amount: <strong>₹${amount.toLocaleString()}</strong></p>
+          <p>Mode: <strong>${paymentMode === 'CASH' ? '💵 Cash' : '💳 Online (Razorpay)'}</strong></p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Proceed',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#0f172a',
+      cancelButtonColor: '#94a3b8',
+      borderRadius: '16px',
+    })
+
+    if (!result.isConfirmed) return
+
+    if (paymentMode === 'CASH') {
       await confirmPayment({ paymentMode: 'CASH', otp })
     } else {
-      // Online payment — open Razorpay checkout first
       await handleRazorpayCheckout()
     }
   }
@@ -145,7 +168,17 @@ export default function PaymentModal({
         razorpayPaymentId: paymentData.razorpayPaymentId,
         razorpaySignature: paymentData.razorpaySignature,
       })
-      
+
+      await Swal.fire({
+        title: 'Payment Successful! 🎉',
+        html: `<p>Installment <strong>#${installmentNumber}</strong> of <strong>₹${amount.toLocaleString()}</strong> has been paid successfully.</p>`,
+        icon: 'success',
+        confirmButtonText: 'Done',
+        confirmButtonColor: '#0f172a',
+        timer: 3000,
+        timerProgressBar: true,
+      })
+
       onSuccess()
     } catch (err) {
       const errorData = err?.response?.data

@@ -7,6 +7,7 @@ import com.krunity.HostelManagment.dto.CreateRoomRequest;
 import com.krunity.HostelManagment.dto.RoomResponse;
 import com.krunity.HostelManagment.dto.RoomTenantResponse;
 import com.krunity.HostelManagment.enums.AgreementStatus;
+import com.krunity.HostelManagment.enums.RoomAllotmentStatus;
 import com.krunity.HostelManagment.enums.RoomType;
 import com.krunity.HostelManagment.exception.AlreadyExistException;
 import com.krunity.HostelManagment.exception.NotFoundException;
@@ -15,6 +16,7 @@ import com.krunity.HostelManagment.repository.*;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.List;
@@ -222,12 +224,27 @@ public class RoomService {
             for (Agreement agreement : agreements) {
                 User tenant = userRepository.findById(agreement.getUserId()).orElse(null);
                 if (tenant != null) {
+                    // Calculate agreement end date based on plan duration
+                    LocalDate agreementEndDate = null;
+                    String planName = null;
+                    
+                    if (agreement.getPlanSnapshot() != null) {
+                        planName = agreement.getPlanSnapshot().getPlanName();
+                        if (agreement.getStartDate() != null && agreement.getPlanSnapshot().getDuration() != null) {
+                            int durationMonths = agreement.getPlanSnapshot().getDuration().getValue();
+                            agreementEndDate = agreement.getStartDate().plusMonths(durationMonths);
+                        }
+                    }
+                    
                     tenantResponses.add(RoomTenantResponse.builder()
                             .roomId(roomId)
                             .tenantId(agreement.getUserId().toString())
                             .tenantName(tenant.getDisplayName())
+                            .phoneNumber(tenant.getPhoneNumber())
+                            .planName(planName)
                             .allotmentDate(agreement.getStartDate() != null ? 
                                     java.sql.Date.valueOf(agreement.getStartDate()) : null)
+                            .agreementEndDate(agreementEndDate)
                             .roomAllotmentStatus(agreement.getStatus().name())
                             .coTenantNames(agreement.getCoTenantNames())
                             .agreementType("FLAT")
@@ -236,11 +253,25 @@ public class RoomService {
             }
         } else {
             // For PG_ROOM, get data from RoomAllotment table (existing logic)
-            List<RoomAllotment> roomAllotments = roomAllotmentRepository.findByRoom(room);
+            List<RoomAllotment> roomAllotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(room, RoomAllotmentStatus.CONFIRMED);
             tenantResponses = roomAllotments.stream()
                     .map(allotment -> {
                         RoomTenantResponse response = RoomAllotmentMapper.mapToRoomTenantResponse(allotment);
                         response.setAgreementType("ROOM");
+                        
+                        // Try to get plan information from Agreement if available
+                        if (allotment.getPaymentPlanId() != null && allotment.getPaymentPlanId().getAgreementId() != null) {
+                            try {
+                                Agreement agreement = agreementRepository.findById(allotment.getPaymentPlanId().getAgreementId()).orElse(null);
+                                if (agreement != null && agreement.getPlanSnapshot() != null) {
+                                    response.setPlanName(agreement.getPlanSnapshot().getPlanName());
+                                }
+                            } catch (Exception e) {
+                                // If agreement not found, plan name will remain null
+                                System.out.println("Could not fetch plan info for allotment: " + e.getMessage());
+                            }
+                        }
+                        
                         return response;
                     })
                     .toList();

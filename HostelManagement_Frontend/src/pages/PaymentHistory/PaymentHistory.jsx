@@ -20,7 +20,55 @@ function formatDateTime(d) {
   })
 }
 
-/** Group transactions by calendar date label */
+/** Group transactions by month and calculate monthly totals */
+function groupByMonth(txns) {
+  const groups = {}
+  const monthlyTotals = {}
+  
+  txns.forEach((tx) => {
+    const d = new Date(tx.createdAt)
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const monthLabel = d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+    
+    if (!groups[monthKey]) {
+      groups[monthKey] = {
+        label: monthLabel,
+        transactions: [],
+        received: 0,
+        sent: 0,
+        net: 0
+      }
+    }
+    
+    groups[monthKey].transactions.push(tx)
+    
+    // Calculate monthly totals for completed transactions only
+    if (tx.status === 'COMPLETED') {
+      if (tx.direction === 'RECEIVED') {
+        groups[monthKey].received += tx.amount
+      } else {
+        groups[monthKey].sent += tx.amount
+      }
+    }
+  })
+  
+  // Calculate net for each month
+  Object.keys(groups).forEach(monthKey => {
+    groups[monthKey].net = groups[monthKey].received - groups[monthKey].sent
+  })
+  
+  // Sort months in descending order (most recent first)
+  const sortedGroups = Object.keys(groups)
+    .sort((a, b) => b.localeCompare(a))
+    .reduce((acc, key) => {
+      acc[key] = groups[key]
+      return acc
+    }, {})
+  
+  return sortedGroups
+}
+
+/** Group transactions by calendar date label within a month */
 function groupByDate(txns) {
   const groups = {}
   txns.forEach((tx) => {
@@ -38,6 +86,39 @@ function groupByDate(txns) {
     groups[label].push(tx)
   })
   return groups
+}
+
+// ── Monthly header component ─────────────────────────────────────────────────
+
+function MonthlyHeader({ monthLabel, received, sent, net }) {
+  return (
+    <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-700">{monthLabel}</h3>
+        <div className={`text-xl font-bold ${net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          {net >= 0 ? '+' : ''}{fmt(net)}
+        </div>
+      </div>
+      {(received > 0 || sent > 0) && (
+        <div className="flex items-center gap-6 mt-2 text-sm">
+          {received > 0 && (
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+              <span className="text-slate-600">Received: </span>
+              <span className="text-emerald-600 font-medium">{fmt(received)}</span>
+            </div>
+          )}
+          {sent > 0 && (
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
+              <span className="text-slate-600">Sent: </span>
+              <span className="text-rose-600 font-medium">{fmt(sent)}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Status / mode config ──────────────────────────────────────────────────────
@@ -271,7 +352,7 @@ export default function PaymentHistory() {
     })
   }, [transactions, filter, search])
 
-  const grouped = useMemo(() => groupByDate(filtered), [filtered])
+  const monthlyGroups = useMemo(() => groupByMonth(filtered), [filtered])
 
   // ── render ──────────────────────────────────────────────────────────────────
   return (
@@ -361,22 +442,53 @@ export default function PaymentHistory() {
         </div>
       ) : (
         <div className="space-y-6">
-          {Object.entries(grouped).map(([dateLabel, txns]) => (
-            <div key={dateLabel}>
-              {/* Date group header */}
-              <div className="mb-3 flex items-center gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{dateLabel}</p>
-                <div className="flex-1 border-t border-slate-100" />
-                <p className="text-xs text-slate-400">{txns.length} transaction{txns.length !== 1 ? 's' : ''}</p>
+          {Object.entries(monthlyGroups).length === 0 ? (
+            <div className="rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-3xl">
+                🧾
               </div>
-
-              <div className="space-y-2">
-                {txns.map((tx) => (
-                  <TransactionRow key={tx.transactionId} tx={tx} onClick={setSelected} />
-                ))}
-              </div>
+              <p className="text-base font-semibold text-slate-700">No transactions found</p>
+              <p className="mt-1 text-sm text-slate-400">
+                {search ? 'Try a different search term.' : 'Your payment history will appear here once transactions are made.'}
+              </p>
             </div>
-          ))}
+          ) : (
+            Object.entries(monthlyGroups).map(([monthKey, monthData]) => {
+              const dailyGroups = groupByDate(monthData.transactions)
+              
+              return (
+                <div key={monthKey} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                  {/* Monthly header with totals */}
+                  <MonthlyHeader 
+                    monthLabel={monthData.label}
+                    received={monthData.received}
+                    sent={monthData.sent}
+                    net={monthData.net}
+                  />
+                  
+                  {/* Daily transaction groups within the month */}
+                  <div className="px-6 py-4 space-y-6">
+                    {Object.entries(dailyGroups).map(([dateLabel, txns]) => (
+                      <div key={dateLabel}>
+                        {/* Date group header */}
+                        <div className="mb-3 flex items-center gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{dateLabel}</p>
+                          <div className="flex-1 border-t border-slate-100" />
+                          <p className="text-xs text-slate-400">{txns.length} transaction{txns.length !== 1 ? 's' : ''}</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {txns.map((tx) => (
+                            <TransactionRow key={tx.transactionId} tx={tx} onClick={setSelected} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })
+          )}
         </div>
       )}
 

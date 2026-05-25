@@ -1,8 +1,13 @@
 import { cn } from '../../utils/cn'
 
-function Card({ className = '', children }) {
+function Card({ className = '', children, onClick, ...props }) {
   return (
-    <div className={cn('rounded-3xl border border-white/70 bg-white/95 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.45)] backdrop-blur', className)}>
+    <div 
+      className={cn('rounded-3xl border border-white/70 bg-white/95 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.45)] backdrop-blur', className)}
+      onClick={onClick}
+      style={{ pointerEvents: onClick ? 'auto' : 'auto' }}
+      {...props}
+    >
       {children}
     </div>
   )

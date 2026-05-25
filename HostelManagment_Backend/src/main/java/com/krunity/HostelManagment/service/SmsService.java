@@ -3,9 +3,11 @@ package com.krunity.HostelManagment.service;
 import com.krunity.HostelManagment.config.TwilioConfig;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class SmsService {
     
@@ -14,8 +16,8 @@ public class SmsService {
     
     public void sendSms(String toPhoneNumber, String messageBody) {
         if (!twilioConfig.isEnabled()) {
-            System.out.println("📱 SMS Service Disabled - Would send to: " + toPhoneNumber);
-            System.out.println("📄 Message: " + messageBody);
+            log.info("SMS Service Disabled - Would send to: {}", toPhoneNumber);
+            log.debug("Message content: {}", messageBody);
             return;
         }
         
@@ -29,13 +31,10 @@ public class SmsService {
                 messageBody
             ).create();
             
-            System.out.println("✅ SMS sent successfully! SID: " + message.getSid());
-            System.out.println("   To: " + formattedPhone);
-            System.out.println("   Status: " + message.getStatus());
+            log.info("SMS sent successfully - SID: {}, To: {}, Status: {}", message.getSid(), formattedPhone, message.getStatus());
             
         } catch (Exception e) {
-            System.err.println("❌ Failed to send SMS: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Failed to send SMS to {}: {}", toPhoneNumber, e.getMessage(), e);
             // Don't throw exception - log and continue
             // In production, you might want to implement retry logic or queue failed messages
         }

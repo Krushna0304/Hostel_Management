@@ -163,8 +163,9 @@ public class PaymentScheduleService {
                 .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"));
 
         List<PaymentRequestSchedule> schedules =
-                scheduleRepository.findByTenantPaymentPlan_PlanId(plan.getPlanId());
+                scheduleRepository.findByTenantPaymentPlan_PlanIdOrderByInstallmentNumber(plan.getPlanId());
 
+        // Installments are already sorted by installment number from the database
         List<InstallmentResponse> installments = schedules.stream()
                 .map(this::toInstallmentResponse)
                 .collect(Collectors.toList());

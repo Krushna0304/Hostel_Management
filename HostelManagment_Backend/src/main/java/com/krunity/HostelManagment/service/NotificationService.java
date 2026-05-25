@@ -6,12 +6,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
+@Slf4j
 @Service
 public class NotificationService {
     
@@ -33,7 +35,7 @@ public class NotificationService {
     
     public void sendQrActivationEmail(Agreement agreement, User tenant) {
         if (!emailEnabled || mailSender == null) {
-            System.out.println("Email notification disabled. Would send QR activation email to: " + tenant.getUsername());
+            log.info("{}", "Email notification disabled. Would send QR activation email to: " + tenant.getUsername());
             return;
         }
         
@@ -58,7 +60,7 @@ public class NotificationService {
             
             mailSender.send(message);
         } catch (Exception e) {
-            System.err.println("Failed to send email: " + e.getMessage());
+            log.error("{}", "Failed to send email: " + e.getMessage());
         }
     }
 
@@ -115,11 +117,10 @@ public class NotificationService {
             );
 
             smsService.sendMessage(tenant.getPhoneNumber(), smsBody);
-            System.out.printf("📱 Agreement creation SMS sent to tenant %s (%s)%n",
-                    tenant.getDisplayName(), tenant.getPhoneNumber());
+            log.info("📱 Agreement creation SMS sent to tenant %s (%s)%n", tenant.getDisplayName(), tenant.getPhoneNumber());
 
         } catch (Exception e) {
-            System.err.println("Failed to send agreement creation SMS to tenant: " + e.getMessage());
+            log.error("{}", "Failed to send agreement creation SMS to tenant: " + e.getMessage());
         }
     }
 
@@ -176,11 +177,10 @@ public class NotificationService {
             );
 
             smsService.sendMessage(owner.getPhoneNumber(), ownerSms);
-            System.out.printf("📱 Agreement acceptance SMS sent to owner %s (%s)%n",
-                    owner.getDisplayName(), owner.getPhoneNumber());
+            log.info("📱 Agreement acceptance SMS sent to owner %s (%s)%n", owner.getDisplayName(), owner.getPhoneNumber());
 
         } catch (Exception e) {
-            System.err.println("Failed to send agreement acceptance SMS to owner: " + e.getMessage());
+            log.error("{}", "Failed to send agreement acceptance SMS to owner: " + e.getMessage());
         }
 
         // Also send email if enabled
@@ -195,7 +195,7 @@ public class NotificationService {
                 ));
                 mailSender.send(message);
             } catch (Exception e) {
-                System.err.println("Failed to send agreement acceptance email: " + e.getMessage());
+                log.error("{}", "Failed to send agreement acceptance email: " + e.getMessage());
             }
         }
     }
@@ -245,11 +245,10 @@ public class NotificationService {
             );
 
             smsService.sendMessage(tenant.getPhoneNumber(), tenantSms);
-            System.out.printf("📱 Agreement activation confirmation SMS sent to tenant %s (%s)%n",
-                    tenant.getDisplayName(), tenant.getPhoneNumber());
+            log.info("📱 Agreement activation confirmation SMS sent to tenant %s (%s)%n", tenant.getDisplayName(), tenant.getPhoneNumber());
 
         } catch (Exception e) {
-            System.err.println("Failed to send agreement activation SMS to tenant: " + e.getMessage());
+            log.error("{}", "Failed to send agreement activation SMS to tenant: " + e.getMessage());
         }
     }
 
@@ -265,12 +264,11 @@ public class NotificationService {
         smsService.sendOtp(owner.getPhoneNumber(), otp);
         
         // Also log to console for debugging
-        System.out.println(String.format(
-            "💰 Cash Payment OTP sent to owner %s (%s). OTP: %s",
+        log.info("💰 Cash Payment OTP sent to owner %s (%s). OTP: %s",
             owner.getDisplayName(),
             owner.getPhoneNumber(),
             otp
-        ));
+        );
     }
     
     /**
@@ -279,13 +277,12 @@ public class NotificationService {
     public void sendSms(String phoneNumber, String message) {
         try {
             smsService.sendMessage(phoneNumber, message);
-            System.out.println(String.format(
-                "📱 SMS sent to %s: %s",
+            log.info("📱 SMS sent to %s: %s",
                 phoneNumber,
                 message
-            ));
+                );
         } catch (Exception e) {
-            System.err.println("Failed to send SMS: " + e.getMessage());
+            log.error("{}", "Failed to send SMS: " + e.getMessage());
             throw e;
         }
     }
@@ -295,11 +292,10 @@ public class NotificationService {
      */
     public void sendEmail(String toEmail, String subject, String body) {
         if (!emailEnabled || mailSender == null) {
-            System.out.println(String.format(
-                "📧 Email notification disabled. Would send to %s: %s",
+            log.info("📧 Email notification disabled. Would send to %s: %s",
                 toEmail,
                 subject
-            ));
+            );;
             return;
         }
         
@@ -310,14 +306,182 @@ public class NotificationService {
             message.setText(body);
             
             mailSender.send(message);
-            System.out.println(String.format(
-                "📧 Email sent to %s: %s",
+            log.info("📧 Email sent to %s: %s",
                 toEmail,
                 subject
-            ));
+            );
         } catch (Exception e) {
-            System.err.println("Failed to send email: " + e.getMessage());
+            log.error("{}", "Failed to send email: " + e.getMessage());
             throw e;
+        }
+    }
+    
+    // Settlement-related notification methods
+    
+    public void sendSettlementRequestNotification(User owner, User tenant, com.krunity.HostelManagment.model.SettlementRequest settlement) {
+        if (!emailEnabled || mailSender == null) {
+            log.info("{}", "Email notification disabled. Would send settlement request notification to owner: " + owner.getUsername());
+            return;
+        }
+        
+        try {
+            String reviewUrl = frontendUrl + "/owner/settlements";
+            
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(owner.getUsername() + "@example.com");
+            message.setSubject("New Settlement Request - Hostel Management");
+            message.setText(String.format(
+                "Dear %s,\n\n" +
+                "A new settlement request has been submitted by tenant %s.\n\n" +
+                "Agreement ID: %s\n" +
+                "Security Deposit: ₹%s\n" +
+                "Tenant Notes: %s\n\n" +
+                "Please review and process the settlement request:\n%s\n\n" +
+                "Best regards,\n" +
+                "Hostel Management System",
+                owner.getDisplayName(),
+                tenant.getDisplayName(),
+                settlement.getAgreementId(),
+                settlement.getSecurityDeposit(),
+                settlement.getTenantNotes() != null ? settlement.getTenantNotes() : "No notes provided",
+                reviewUrl
+            ));
+            
+            mailSender.send(message);
+            log.info("{}", "Settlement request notification sent to owner: " + owner.getUsername());
+        } catch (Exception e) {
+            log.error("{}", "Failed to send settlement request notification: " + e.getMessage());
+        }
+    }
+    
+    public void sendSettlementApprovalNotification(User tenant, com.krunity.HostelManagment.model.SettlementRequest settlement) {
+        if (!emailEnabled || mailSender == null) {
+            log.info("{}", "Email notification disabled. Would send settlement approval notification to tenant: " + tenant.getUsername());
+            return;
+        }
+        
+        try {
+            String settlementUrl = frontendUrl + "/tenant-portal/settlements";
+            String settlementType = settlement.getSettlementType();
+            String amountText = settlementType.equals("TENANT_PAYABLE") ? 
+                "You need to pay ₹" + settlement.getFinalSettlementAmount() :
+                "You will receive ₹" + settlement.getFinalSettlementAmount();
+            
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(tenant.getUsername() + "@example.com");
+            message.setSubject("Settlement Approved - Hostel Management");
+            message.setText(String.format(
+                "Dear %s,\n\n" +
+                "Your settlement request has been approved by the owner.\n\n" +
+                "Settlement Details:\n" +
+                "- Security Deposit: ₹%s\n" +
+                "- Total Deductions: ₹%s\n" +
+                "- Final Amount: %s\n\n" +
+                "Owner Notes: %s\n\n" +
+                "Please check your dashboard for next steps:\n%s\n\n" +
+                "Best regards,\n" +
+                "Hostel Management System",
+                tenant.getDisplayName(),
+                settlement.getSecurityDeposit(),
+                settlement.getTotalDeductions(),
+                amountText,
+                settlement.getOwnerNotes() != null ? settlement.getOwnerNotes() : "No additional notes",
+                settlementUrl
+            ));
+            
+            mailSender.send(message);
+            log.info("{}", "Settlement approval notification sent to tenant: " + tenant.getUsername());
+        } catch (Exception e) {
+            log.error("{}", "Failed to send settlement approval notification: " + e.getMessage());
+        }
+    }
+    
+    public void sendSettlementRejectionNotification(User tenant, com.krunity.HostelManagment.model.SettlementRequest settlement) {
+        if (!emailEnabled || mailSender == null) {
+            log.info("{}", "Email notification disabled. Would send settlement rejection notification to tenant: " + tenant.getUsername());
+            return;
+        }
+        
+        try {
+            String settlementUrl = frontendUrl + "/tenant-portal/settlements";
+            
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(tenant.getUsername() + "@example.com");
+            message.setSubject("Settlement Request Rejected - Hostel Management");
+            message.setText(String.format(
+                "Dear %s,\n\n" +
+                "Your settlement request has been rejected by the owner.\n\n" +
+                "Reason: %s\n\n" +
+                "You can submit a new settlement request if needed:\n%s\n\n" +
+                "Best regards,\n" +
+                "Hostel Management System",
+                tenant.getDisplayName(),
+                settlement.getOwnerNotes() != null ? settlement.getOwnerNotes() : "No reason provided",
+                settlementUrl
+            ));
+            
+            mailSender.send(message);
+            log.info("{}", "Settlement rejection notification sent to tenant: " + tenant.getUsername());
+        } catch (Exception e) {
+            log.error("{}", "Failed to send settlement rejection notification: " + e.getMessage());
+        }
+    }
+    
+    public void sendSettlementCompletionNotification(User owner, User tenant, com.krunity.HostelManagment.model.SettlementRequest settlement) {
+        if (!emailEnabled || mailSender == null) {
+            System.out.println("Email notification disabled. Would send settlement completion notifications");
+            return;
+        }
+        
+        try {
+            // Notification to owner
+            SimpleMailMessage ownerMessage = new SimpleMailMessage();
+            ownerMessage.setTo(owner.getUsername() + "@example.com");
+            ownerMessage.setSubject("Settlement Completed - Hostel Management");
+            ownerMessage.setText(String.format(
+                "Dear %s,\n\n" +
+                "The settlement for tenant %s has been completed successfully.\n\n" +
+                "Agreement ID: %s\n" +
+                "Final Amount: ₹%s (%s)\n" +
+                "Payment Reference: %s\n" +
+                "Completed At: %s\n\n" +
+                "The agreement has been marked as settled.\n\n" +
+                "Best regards,\n" +
+                "Hostel Management System",
+                owner.getDisplayName(),
+                tenant.getDisplayName(),
+                settlement.getAgreementId(),
+                settlement.getFinalSettlementAmount(),
+                settlement.getSettlementType(),
+                settlement.getPaymentReference(),
+                DATE_FMT.format(settlement.getSettledAt())
+            ));
+            
+            // Notification to tenant
+            SimpleMailMessage tenantMessage = new SimpleMailMessage();
+            tenantMessage.setTo(tenant.getUsername() + "@example.com");
+            tenantMessage.setSubject("Settlement Completed - Hostel Management");
+            tenantMessage.setText(String.format(
+                "Dear %s,\n\n" +
+                "Your agreement settlement has been completed successfully.\n\n" +
+                "Final Amount: ₹%s (%s)\n" +
+                "Payment Reference: %s\n" +
+                "Completed At: %s\n\n" +
+                "Thank you for using our hostel management system.\n\n" +
+                "Best regards,\n" +
+                "Hostel Management System",
+                tenant.getDisplayName(),
+                settlement.getFinalSettlementAmount(),
+                settlement.getSettlementType(),
+                settlement.getPaymentReference(),
+                DATE_FMT.format(settlement.getSettledAt())
+            ));
+            
+            mailSender.send(ownerMessage);
+            mailSender.send(tenantMessage);
+            System.out.println("Settlement completion notifications sent to both parties");
+        } catch (Exception e) {
+            log.error("{}", "Failed to send settlement completion notifications: " + e.getMessage());
         }
     }
 }

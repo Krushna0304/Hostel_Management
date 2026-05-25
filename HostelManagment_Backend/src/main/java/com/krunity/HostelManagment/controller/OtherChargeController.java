@@ -43,7 +43,7 @@ public class OtherChargeController {
 
         UUID ownerId = ApplicationContext.getUser().getUserId();
         log.info("Creating other charge: {} by owner: {}", request.getChargeName(), ownerId);
-        
+
         OtherChargeResponse response = otherChargeService.createOtherCharge(request, ownerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -55,7 +55,7 @@ public class OtherChargeController {
     public ResponseEntity<List<OtherChargeResponse>> getOwnerCharges(Authentication authentication) {
         UUID ownerId = userService.getCurrentUserId(authentication);
         log.info("Fetching charges for owner: {}", ownerId);
-        
+
         List<OtherChargeResponse> charges = otherChargeService.getChargesByOwner(ownerId);
         return ResponseEntity.ok(charges);
     }
@@ -70,17 +70,17 @@ public class OtherChargeController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir,
             Authentication authentication) {
-        
+
         UUID ownerId = userService.getCurrentUserId(authentication);
         log.info("Fetching paginated charges for owner: {} - page: {}, size: {}", ownerId, page, size);
-        
-        Sort sort = sortDir.equalsIgnoreCase("desc") ? 
-                Sort.by(sortBy).descending() : 
+
+        Sort sort = sortDir.equalsIgnoreCase("desc") ?
+                Sort.by(sortBy).descending() :
                 Sort.by(sortBy).ascending();
-        
+
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<OtherChargeResponse> charges = otherChargeService.getChargesByOwner(ownerId, pageable);
-        
+
         return ResponseEntity.ok(charges);
     }
 
@@ -91,7 +91,7 @@ public class OtherChargeController {
     public ResponseEntity<List<OtherChargeResponse>> getTenantCharges(Authentication authentication) {
         UUID tenantId = userService.getCurrentUserId(authentication);
         log.info("Fetching charges for tenant: {}", tenantId);
-        
+
         List<OtherChargeResponse> charges = otherChargeService.getChargesByTenant(tenantId);
         return ResponseEntity.ok(charges);
     }
@@ -103,13 +103,13 @@ public class OtherChargeController {
     public ResponseEntity<OtherChargeResponse> getChargeById(
             @PathVariable UUID chargeId,
             Authentication authentication) {
-        
+
         log.info("Fetching charge: {}", chargeId);
-        
+
         OtherChargeResponse charge = otherChargeService.getChargeById(chargeId);
-        
+
         // TODO: Add authorization check to ensure user can access this charge
-        
+
         return ResponseEntity.ok(charge);
     }
 
@@ -121,10 +121,10 @@ public class OtherChargeController {
             @PathVariable UUID chargeId,
             @Valid @RequestBody OtherChargeRequest request,
             Authentication authentication) {
-        
+
         UUID ownerId = userService.getCurrentUserId(authentication);
         log.info("Updating charge: {} by owner: {}", chargeId, ownerId);
-        
+
         OtherChargeResponse response = otherChargeService.updateCharge(chargeId, request, ownerId);
         return ResponseEntity.ok(response);
     }
@@ -136,10 +136,11 @@ public class OtherChargeController {
     public ResponseEntity<Void> deleteCharge(
             @PathVariable UUID chargeId,
             Authentication authentication) {
-        
-        UUID ownerId = userService.getCurrentUserId(authentication);
+
+//        UUID ownerId = userService.getCurrentUserId(authentication);
+        UUID ownerId = ApplicationContext.getUser().getUserId();
         log.info("Deleting charge: {} by owner: {}", chargeId, ownerId);
-        
+
         otherChargeService.deleteCharge(chargeId, ownerId);
         return ResponseEntity.noContent().build();
     }
@@ -197,14 +198,14 @@ class TenantOtherChargeController {
             @PathVariable UUID chargeId,
             @Valid @RequestBody OtherChargePaymentRequest request) {
         try {
-            System.out.println("=== OTHER CHARGE PAYMENT REQUEST START ===");
-            System.out.println("Charge ID: " + chargeId);
-            System.out.println("Request Amount: " + request.getAmount());
-            System.out.println("Payment Mode: " + request.getPaymentMode());
-            System.out.println("OTP provided: " + (request.getOtp() != null ? "Yes (length: " + request.getOtp().length() + ")" : "No"));
+            log.debug("=== OTHER CHARGE PAYMENT REQUEST START ===");
+            log.debug("Charge ID: {}", chargeId);
+            log.debug("Request Amount: {}", request.getAmount());
+            log.debug("Payment Mode: {}", request.getPaymentMode());
+            log.debug("OTP provided: {}", request.getOtp() != null ? "Yes (length: " + request.getOtp().length() + ")" : "No");
             
             UUID tenantId = ApplicationContext.getUser().getUserId();
-            System.out.println("Tenant: " + tenantId);
+            log.debug("Tenant: {}", tenantId);
 
             // Get the charge to find the owner
             OtherChargeResponse charge = otherChargeService.getChargeById(chargeId);
@@ -238,18 +239,17 @@ class TenantOtherChargeController {
                 return ResponseEntity.badRequest().body("Online payments not yet implemented for other charges");
             }
 
-            System.out.println("Payment processed successfully!");
-            System.out.println("=== OTHER CHARGE PAYMENT REQUEST END ===");
+            log.debug("Payment processed successfully!");
+            log.debug("=== OTHER CHARGE PAYMENT REQUEST END ===");
             return ResponseEntity.ok().body("Payment processed successfully");
             
         } catch (IllegalStateException | IllegalArgumentException e) {
-            System.out.println("=== PAYMENT VALIDATION ERROR ===");
-            System.out.println("Error: " + e.getMessage());
+            log.debug("=== PAYMENT VALIDATION ERROR ===");
+            log.debug("Error: {}", e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            System.out.println("=== PAYMENT SYSTEM ERROR ===");
-            System.out.println("Error: " + e.getMessage());
-            e.printStackTrace();
+            log.debug("=== PAYMENT SYSTEM ERROR ===");
+            log.error("Payment system error for other charge", e);
             return ResponseEntity.status(500).body(e.getMessage());
         }
     }
@@ -262,14 +262,14 @@ class TenantOtherChargeController {
             @PathVariable UUID installmentId,
             @Valid @RequestBody OtherChargePaymentRequest request) {
         try {
-            System.out.println("=== OTHER CHARGE INSTALLMENT PAYMENT REQUEST START ===");
-            System.out.println("Installment ID: " + installmentId);
-            System.out.println("Request Amount: " + request.getAmount());
-            System.out.println("Payment Mode: " + request.getPaymentMode());
-            System.out.println("OTP provided: " + (request.getOtp() != null ? "Yes (length: " + request.getOtp().length() + ")" : "No"));
+            log.debug("=== OTHER CHARGE INSTALLMENT PAYMENT REQUEST START ===");
+            log.debug("Installment ID: {}", installmentId);
+            log.debug("Request Amount: {}", request.getAmount());
+            log.debug("Payment Mode: {}", request.getPaymentMode());
+            log.debug("OTP provided: {}", request.getOtp() != null ? "Yes (length: " + request.getOtp().length() + ")" : "No");
             
             UUID tenantId = ApplicationContext.getUser().getUserId();
-            System.out.println("Tenant: " + tenantId);
+            log.debug("Tenant: {}", tenantId);
 
             // Validate OTP for cash payments
             if ("CASH".equals(request.getPaymentMode())) {
@@ -300,18 +300,17 @@ class TenantOtherChargeController {
                 return ResponseEntity.badRequest().body("Online payments not yet implemented for other charge installments");
             }
 
-            System.out.println("Installment payment processed successfully!");
-            System.out.println("=== OTHER CHARGE INSTALLMENT PAYMENT REQUEST END ===");
+            log.debug("Installment payment processed successfully!");
+            log.debug("=== OTHER CHARGE INSTALLMENT PAYMENT REQUEST END ===");
             return ResponseEntity.ok().body("Installment payment processed successfully");
             
         } catch (IllegalStateException | IllegalArgumentException e) {
-            System.out.println("=== INSTALLMENT PAYMENT VALIDATION ERROR ===");
-            System.out.println("Error: " + e.getMessage());
+            log.debug("=== INSTALLMENT PAYMENT VALIDATION ERROR ===");
+            log.debug("Error: {}", e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            System.out.println("=== INSTALLMENT PAYMENT SYSTEM ERROR ===");
-            System.out.println("Error: " + e.getMessage());
-            e.printStackTrace();
+            log.debug("=== INSTALLMENT PAYMENT SYSTEM ERROR ===");
+            log.error("Installment payment system error for other charge", e);
             return ResponseEntity.status(500).body(e.getMessage());
         }
     }
@@ -341,6 +340,7 @@ class OwnerOtherChargeController {
 
     private final OtherChargeService otherChargeService;
     private final UserService userService;
+    private final OtherChargePaymentService otherChargePaymentService;
 
     /**
      * Get all charges created by the owner
@@ -367,5 +367,101 @@ class OwnerOtherChargeController {
         
         OtherChargeResponse response = otherChargeService.createOtherCharge(request, ownerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Collect cash payment for other charge (Owner collection)
+     */
+    @PostMapping("/{chargeId}/collect-cash")
+    public ResponseEntity<?> collectCashPayment(
+            @PathVariable UUID chargeId,
+            @Valid @RequestBody OwnerCollectPaymentRequest request) {
+        try {
+            UUID ownerId = ApplicationContext.getUser().getUserId();
+            log.info("Owner {} collecting cash payment for charge: {}", ownerId, chargeId);
+
+            // Get the charge to determine the tenant
+            OtherChargeResponse charge = otherChargeService.getChargeById(chargeId);
+            
+            // For tenant-specific charges, use the assigned tenant
+            // For room-based charges, we need to determine which tenant is paying
+            UUID tenantId;
+            if (charge.getCategory().name().equals("OTHER_CHARGE_TENANT")) {
+                tenantId = charge.getTenantId();
+            } else {
+                // For room-based charges, use the tenant ID from the request
+                if (request.getTenantId() == null) {
+                    return ResponseEntity.badRequest().body("Tenant ID is required for room-based charges");
+                }
+                tenantId = request.getTenantId();
+            }
+
+            // Record the cash payment
+            otherChargePaymentService.recordOtherChargeCashPayment(
+                chargeId,
+                tenantId,
+                request.getAmount(),
+                ownerId,
+                request.getNotes() != null ? request.getNotes() : "Cash payment collected by owner"
+            );
+
+            log.info("Cash payment collected successfully for charge: {}", chargeId);
+            return ResponseEntity.ok().body("Payment collected successfully");
+            
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            log.error("Payment collection validation error: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            log.error("Payment collection system error: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Failed to collect payment: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Collect cash payment for other charge installment (Owner collection)
+     */
+    @PostMapping("/installments/{installmentId}/collect-cash")
+    public ResponseEntity<?> collectInstallmentCashPayment(
+            @PathVariable UUID installmentId,
+            @Valid @RequestBody OwnerCollectPaymentRequest request) {
+        try {
+            UUID ownerId = ApplicationContext.getUser().getUserId();
+            log.info("Owner {} collecting cash payment for installment: {}", ownerId, installmentId);
+
+            // The service method will validate that the owner owns this installment's charge
+            // and will determine the tenant from the installment
+            UUID tenantId = request.getTenantId(); // Get tenant ID from request
+            if (tenantId == null) {
+                return ResponseEntity.badRequest().body("Tenant ID is required for installment payments");
+            }
+
+            otherChargePaymentService.recordOtherChargeInstallmentCashPayment(
+                installmentId,
+                request.getAmount(),
+                tenantId,
+                request.getNotes() != null ? request.getNotes() : "Cash payment collected by owner"
+            );
+
+            log.info("Cash payment collected successfully for installment: {}", installmentId);
+            return ResponseEntity.ok().body("Installment payment collected successfully");
+            
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            log.error("Installment payment collection validation error: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            log.error("Installment payment collection system error: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Failed to collect installment payment: " + e.getMessage());
+        }
+    }
+
+    /**
+     * DTO for owner payment collection requests
+     */
+    @Data
+    public static class OwnerCollectPaymentRequest {
+        private BigDecimal amount;
+        private String paymentMode; // "CASH" or "ONLINE"
+        private UUID tenantId; // Required for room-based charges
+        private String notes;
     }
 }

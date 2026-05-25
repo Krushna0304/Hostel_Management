@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Swal from 'sweetalert2'
 import { ownerReportService } from '../services/agreementService'
 import { Button, Badge } from './ui'
 
@@ -62,6 +63,27 @@ export default function OwnerPaymentModal({ tenant, onClose, onSuccess }) {
     e.preventDefault()
     if (!selectedInstallment || !paymentAmount) return
 
+    // SweetAlert2 confirmation before proceeding
+    const result = await Swal.fire({
+      title: 'Collect Payment?',
+      html: `
+        <div style="text-align:left;font-size:15px;">
+          <p style="margin-bottom:8px;">Tenant: <strong>${tenant.tenantName}</strong></p>
+          <p style="margin-bottom:8px;">Installment: <strong>#${selectedInstallment.installmentNumber}</strong></p>
+          <p style="margin-bottom:8px;">Amount: <strong>₹${parseInt(paymentAmount).toLocaleString()}</strong></p>
+          <p>Mode: <strong>${paymentMode === 'CASH' ? '💵 Cash' : '💳 Online'}</strong></p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Collect',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#0f172a',
+      cancelButtonColor: '#94a3b8',
+    })
+
+    if (!result.isConfirmed) return
+
     try {
       setProcessing(true)
       setError('')
@@ -73,7 +95,17 @@ export default function OwnerPaymentModal({ tenant, onClose, onSuccess }) {
       }
 
       await ownerReportService.collectPayment(selectedInstallment.scheduleId, paymentData)
-      
+
+      await Swal.fire({
+        title: 'Payment Collected! 🎉',
+        html: `<p>Installment <strong>#${selectedInstallment.installmentNumber}</strong> of <strong>₹${parseInt(paymentAmount).toLocaleString()}</strong> collected from <strong>${tenant.tenantName}</strong>.</p>`,
+        icon: 'success',
+        confirmButtonText: 'Done',
+        confirmButtonColor: '#0f172a',
+        timer: 3000,
+        timerProgressBar: true,
+      })
+
       onSuccess?.()
       onClose()
     } catch (err) {

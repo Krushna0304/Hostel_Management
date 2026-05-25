@@ -18,6 +18,14 @@ spring:
     mongodb:
       uri: mongodb://localhost:27017/hostel_management
       database: hostel_management
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+    time-zone: UTC
   mail:
     host: smtp.gmail.com
     port: 587

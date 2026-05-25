@@ -127,7 +127,7 @@ Look for `TODO:` comments in the code for:
 - `/login` → Login screen
 - `/register` → Registration screen
 - `/owner/dashboard` → Owner dashboard (protected, OWNER role)
-- `/owner/create-hostel` → Create hostel form (protected)
+- `/owner/hostels/create-hostel` → Create hostel form (protected)
 - `/owner/add-floor` → Add floor form (protected)
 - `/owner/add-room` → Add room form (protected)
 

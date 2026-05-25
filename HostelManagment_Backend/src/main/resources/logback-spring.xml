@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="30 seconds">
+
+    <!-- ================================================================== -->
+    <!-- PROPERTIES                                                         -->
+    <!-- ================================================================== -->
+    <property name="LOG_DIR"     value="./logs" />
+    <property name="APP_NAME"    value="hostel-management" />
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-40.40logger{39} : %msg%n" />
+
+    <!-- ================================================================== -->
+    <!-- CONSOLE APPENDER                                                   -->
+    <!-- ================================================================== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%-40.40logger{39}) : %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ================================================================== -->
+    <!-- ROLLING FILE APPENDER — daily rotation, 30-day retention           -->
+    <!-- ================================================================== -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/${APP_NAME}.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/archived/${APP_NAME}-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- ================================================================== -->
+    <!-- ERROR-ONLY FILE APPENDER — separate file for errors                -->
+    <!-- ================================================================== -->
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/${APP_NAME}-error.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/archived/${APP_NAME}-error-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>60</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- ================================================================== -->
+    <!-- LOGGER LEVELS — Application                                        -->
+    <!-- ================================================================== -->
+    <logger name="com.krunity.HostelManagment" level="DEBUG" />
+
+    <!-- ================================================================== -->
+    <!-- LOGGER LEVELS — Frameworks (quieter)                               -->
+    <!-- ================================================================== -->
+    <logger name="org.springframework"           level="INFO"  />
+    <logger name="org.springframework.web"       level="INFO"  />
+    <logger name="org.springframework.security"  level="INFO"  />
+    <logger name="org.hibernate"                 level="INFO"  />
+    <logger name="org.hibernate.SQL"             level="DEBUG" />
+    <logger name="org.hibernate.type.descriptor"  level="TRACE" />
+    <logger name="org.mongodb.driver"            level="INFO"  />
+    <logger name="com.zaxxer.hikari"             level="INFO"  />
+
+    <!-- ================================================================== -->
+    <!-- PROFILE: dev — verbose console, file logging                       -->
+    <!-- ================================================================== -->
+    <springProfile name="dev,default">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="FILE" />
+            <appender-ref ref="ERROR_FILE" />
+        </root>
+    </springProfile>
+
+    <!-- ================================================================== -->
+    <!-- PROFILE: prod — INFO level, file-focused                           -->
+    <!-- ================================================================== -->
+    <springProfile name="prod">
+        <logger name="com.krunity.HostelManagment" level="INFO" />
+        <logger name="org.hibernate.SQL"            level="WARN" />
+        <logger name="org.hibernate.type.descriptor" level="WARN" />
+
+        <root level="WARN">
+            <appender-ref ref="CONSOLE" />
+            <appender-ref ref="FILE" />
+            <appender-ref ref="ERROR_FILE" />
+        </root>
+    </springProfile>
+
+</configuration>

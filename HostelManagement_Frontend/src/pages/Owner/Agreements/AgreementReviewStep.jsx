@@ -2,15 +2,18 @@ import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import agreementService from "../../../services/agreementService";
 import Button from "../../../components/Button";
+import { Alert } from "../../../components/ui";
 
 export default function AgreementReviewStep({ prevStep, formData }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
+  const [alert, setAlert] = useState(null); // { tone, message }
 
   const handleConfirm = async () => {
     setLoading(true);
     setError("");
+    setAlert(null);
     try {
       // Prepare agreement data - using plan-based approach
       const agreementPayload = {
@@ -28,7 +31,15 @@ export default function AgreementReviewStep({ prevStep, formData }) {
       const res = formData.agreementType === 'FLAT'
         ? await agreementService.createFlatAgreement(agreementPayload)
         : await agreementService.createRoomAgreement(agreementPayload);
-      setSuccess(res.data);
+      
+      // Show success popup first
+      setAlert({ tone: 'success', message: '✅ Agreement Created Successfully! The agreement has been generated and QR code is ready for tenant activation.' });
+      
+      // After 3 seconds, hide popup and show success details
+      setTimeout(() => {
+        setAlert(null);
+        setSuccess(res.data);
+      }, 3000);
     } catch (err) {
       const errorData = err?.response?.data
       
@@ -91,6 +102,18 @@ export default function AgreementReviewStep({ prevStep, formData }) {
 
   return (
     <div className="space-y-4">
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => setAlert(null)}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
+
       <h2 className="text-xl font-semibold mb-4">Review Agreement</h2>
 
       {error && (

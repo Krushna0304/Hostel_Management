@@ -3,9 +3,11 @@ package com.krunity.HostelManagment.config;
 import com.twilio.Twilio;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
+@Slf4j
 @Configuration
 @Getter
 public class TwilioConfig {
@@ -26,9 +28,9 @@ public class TwilioConfig {
     public void initTwilio() {
         if (enabled) {
             Twilio.init(accountSid, authToken);
-            System.out.println("✅ Twilio initialized successfully with phone number: " + phoneNumber);
+            log.info("Twilio initialized successfully with phone number: {}", phoneNumber);
         } else {
-            System.out.println("⚠️ Twilio SMS is disabled. Set twilio.enabled=true to enable SMS sending.");
+            log.warn("Twilio SMS is disabled. Set twilio.enabled=true to enable SMS sending.");
         }
     }
 }

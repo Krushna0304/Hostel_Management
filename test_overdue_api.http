@@ -1,0 +1,38 @@
+# ============================================================================
+# API Testing for Overdue Functionality
+# Use with REST Client extension in VS Code or Postman
+# ============================================================================
+
+### 1. Test manual overdue job trigger (if TestController is added)
+POST http://localhost:8080/api/test/trigger-overdue-job
+Content-Type: application/json
+
+### 2. Login as Owner
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "owner@example.com",
+  "password": "password123"
+}
+
+### 3. Get Collection Dashboard Data (replace YOUR_TOKEN with actual token)
+GET http://localhost:8080/api/owner/reports/collection-summary
+Authorization: Bearer YOUR_TOKEN
+
+### 4. Get specific tenant installments
+GET http://localhost:8080/api/owner/reports/tenant/TENANT_ID/installments
+Authorization: Bearer YOUR_TOKEN
+
+### 5. Login as Tenant to see overdue from tenant perspective
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "tenant@example.com",
+  "password": "password123"
+}
+
+### 6. Get Tenant Dashboard (should show overdue count)
+GET http://localhost:8080/api/tenant/dashboard
+Authorization: Bearer TENANT_TOKEN

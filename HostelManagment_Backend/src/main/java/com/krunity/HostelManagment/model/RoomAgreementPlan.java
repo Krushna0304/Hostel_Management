@@ -24,6 +24,14 @@ public class RoomAgreementPlan {
 
     // Owner who created this plan — null means it's a global/system plan visible to all
     private java.util.UUID ownerId;
+    
+    // Flag to track if plan is in use (0 = New/Editable, 1 = In Use/Not Editable)
+    @Builder.Default
+    private Integer inUseFlag = 0;
+    
+    // Flag to track if plan is active (true = Active, false = Inactive/Deactivated)
+    @Builder.Default
+    private Boolean isActive = true;
 
     // Custom fields — owner can add arbitrary key-value metadata
     private java.util.Map<String, Object> customFields;

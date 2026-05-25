@@ -159,6 +159,38 @@ public class PaymentService {
     }
 
     /**
+     * Creates a payment order for settlement payment.
+     * Amount is in rupees — converted to paise internally.
+     * Uses owner-specific Razorpay credentials.
+     */
+    public CreateOrderResponse createSettlementPaymentOrder(UUID settlementId, long amountInRupees, String currency) {
+        log.info("Creating payment order for settlement: {} amount: ₹{}", settlementId, amountInRupees);
+
+        // For settlement payments, we need to get the owner from the settlement
+        // We'll need to inject SettlementService or SettlementRepository to get the settlement details
+        // For now, let's use a simple approach and get it via the settlement service
+        
+        // Get settlement to identify owner via agreement
+        // Note: This requires adding SettlementRepository dependency
+        
+        // For now, use default gateway - this should be updated to use owner-specific gateway
+        // when we have access to settlement details
+        PaymentGateway gateway = defaultPaymentGateway;
+
+        // Shorten receipt ID to fit Razorpay's 40 character limit
+        String shortId = settlementId.toString().replace("-", "").substring(0, 32);
+        
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .amount(amountInRupees * 100)  // Convert to paise
+                .currency(currency != null ? currency : "INR")
+                .receiptId("S-" + shortId)  // S- prefix + 32 chars = 34 chars total
+                .description("Settlement payment for " + settlementId)
+                .build();
+
+        return gateway.createOrder(request);
+    }
+
+    /**
      * Verifies payment after frontend completes the Razorpay/Stripe checkout.
      * Uses owner-specific credentials for verification.
      */

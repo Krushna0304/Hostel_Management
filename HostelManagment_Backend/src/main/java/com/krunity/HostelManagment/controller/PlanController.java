@@ -53,8 +53,14 @@ public class PlanController {
 
     /** POST /api/plans — create a new owner-specific plan */
     @PostMapping
-    public ResponseEntity<PlanResponse> createPlan(@Valid @RequestBody CreatePlanRequest request) {
+    public ResponseEntity<PlanResponse> createPlan(@RequestBody CreatePlanRequest request) {
         return ResponseEntity.status(201).body(planService.createPlan(request));
+    }
+
+    /** PUT /api/plans/{id} — update owner's plan (only if not in use) */
+    @PutMapping("/{id}")
+    public ResponseEntity<PlanResponse> updatePlan(@PathVariable String id, @Valid @RequestBody CreatePlanRequest request) {
+        return ResponseEntity.ok(planService.updatePlan(id, request));
     }
 
     /** DELETE /api/plans/{id} — soft-delete (deactivate) owner's plan */
@@ -62,6 +68,20 @@ public class PlanController {
     public ResponseEntity<Void> deletePlan(@PathVariable String id) {
         planService.deletePlan(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** POST /api/plans/{id}/activate — activate owner's plan */
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Void> activatePlan(@PathVariable String id) {
+        planService.activatePlan(id);
+        return ResponseEntity.ok().build();
+    }
+
+    /** POST /api/plans/{id}/deactivate — deactivate owner's plan */
+    @PostMapping("/{id}/deactivate")
+    public ResponseEntity<Void> deactivatePlan(@PathVariable String id) {
+        planService.deactivatePlan(id);
+        return ResponseEntity.ok().build();
     }
     
     /** GET /api/plans/{id}/payment-breakdown — get payment breakdown for a plan */

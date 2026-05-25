@@ -126,10 +126,46 @@ export default function Profile() {
       const res = await profileService.updateProfile(username, payload)
       setProfile(res.data)
       setForm((prev) => ({ ...prev, newPassword: '', confirmPassword: '' }))
-      setAlert({ tone: 'success', message: 'Profile updated successfully.' })
+      setAlert({ tone: 'success', message: '✅ Profile updated successfully! Your changes have been saved.' })
+      
+      // Auto-hide success message after 5 seconds
+      setTimeout(() => setAlert(null), 5000)
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Failed to update profile. Please try again.'
-      setAlert({ tone: 'error', message: msg })
+      console.error('Profile update error:', err)
+      
+      // Handle specific error cases
+      let errorMessage = 'Failed to update profile. Please try again.'
+      
+      if (err?.response?.status === 400) {
+        const errorData = err.response.data
+        if (typeof errorData === 'string') {
+          errorMessage = errorData
+        } else if (errorData?.message) {
+          errorMessage = errorData.message
+        } else if (errorData?.errors) {
+          // Handle validation errors
+          const validationErrors = Object.values(errorData.errors).join(', ')
+          errorMessage = `Validation failed: ${validationErrors}`
+        }
+      } else if (err?.response?.status === 409) {
+        errorMessage = '📱 Phone number already exists. Please use a different phone number.'
+      } else if (err?.response?.status === 404) {
+        errorMessage = '👤 User not found. Please log in again.'
+      } else if (err?.response?.status === 401) {
+        errorMessage = '🔒 Session expired. Please log in again.'
+        // Redirect to login after a short delay
+        setTimeout(() => {
+          localStorage.removeItem('authToken')
+          localStorage.removeItem('userRole')
+          window.location.href = '/login'
+        }, 2000)
+      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        errorMessage = '🌐 Network error. Please check your internet connection and try again.'
+      } else if (err?.response?.data?.message) {
+        errorMessage = err.response.data.message
+      }
+      
+      setAlert({ tone: 'error', message: errorMessage })
     } finally {
       setSaving(false)
     }
@@ -151,9 +187,15 @@ export default function Profile() {
       ) : null}
 
       {alert ? (
-        <Alert tone={alert.tone} onClose={() => setAlert(null)}>
-          {alert.message}
-        </Alert>
+        <div className="fixed top-4 right-4 z-50 max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => setAlert(null)}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.6fr]">
@@ -190,12 +232,12 @@ export default function Profile() {
                     value={
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          profile.isActive
+                          profile.active
                             ? 'bg-emerald-100 text-emerald-800'
                             : 'bg-rose-100 text-rose-800'
                         }`}
                       >
-                        {profile.isActive ? 'Active' : 'Inactive'}
+                        {profile.active ? 'Active' : 'Inactive'}
                       </span>
                     }
                   />
@@ -283,9 +325,11 @@ export default function Profile() {
 
                 <Button
                   type="submit"
-                  label={saving ? 'Saving…' : 'Save changes'}
+                  label={saving ? 'Saving changes...' : 'Save changes'}
                   loading={saving}
+                  disabled={saving}
                   fullWidth
+                  className={saving ? 'cursor-not-allowed' : ''}
                 />
               </form>
             )}

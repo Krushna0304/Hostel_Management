@@ -1,0 +1,1411 @@
+[{
+  "_id": {
+    "$oid": "6a037149a8950702df5962dc"
+  },
+  "planType": "PG_ROOM",
+  "planName": "Premium Triple Sharing Plan",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "inUseFlag": 0,
+  "customFields": {
+    "mealPlan": "Breakfast Included"
+  },
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "8500",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "17000",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": true,
+        "amount": "500",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": true,
+        "amount": "2000",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": true,
+        "amount": "300",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "800",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "300",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": [
+      {
+        "name": "Gym Access",
+        "description": "",
+        "availability": "24x7"
+      }
+    ]
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "100",
+      "maxAmount": "2000"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": [
+      "Visitors allowed only till 9 PM"
+    ]
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": "Nagpur, Maharashtra"
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-12T18:28:25.365Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-16T19:35:36.769Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": "PLAN_STANDARD_MONTHLY_V2",
+  "planType": "ROOM_AGREEMENT",
+  "planName": "Standard Monthly Room Plan",
+  "status": "ACTIVE",
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 12,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "8500",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "17000",
+      "refundable": true,
+      "refundProcessingDays": 15,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "included": true,
+      "cleaningFrequency": "WEEKLY",
+      "deepCleaningOnExit": {
+        "applicable": true,
+        "amount": "1500",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [
+        "Electrical fittings",
+        "Plumbing",
+        "Furniture wear and tear"
+      ]
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "METERED",
+        "ratePerUnit": "10",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "FIXED",
+        "monthlyAmount": "300",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": [
+      {
+        "name": "Wi-Fi",
+        "description": "Unlimited shared broadband internet",
+        "availability": "24x7"
+      },
+      {
+        "name": "Bed & Mattress",
+        "description": "Single bed with standard mattress"
+      },
+      {
+        "name": "Cupboard",
+        "description": "Personal lockable cupboard"
+      },
+      {
+        "name": "Study Table",
+        "description": "Dedicated study table with chair"
+      },
+      {
+        "name": "Fan & Lighting",
+        "description": "Ceiling fan and LED lights"
+      },
+      {
+        "name": "RO Drinking Water",
+        "description": "Filtered drinking water"
+      },
+      {
+        "name": "Common Refrigerator",
+        "description": "Shared refrigerator in common area"
+      },
+      {
+        "name": "Washing Machine",
+        "description": "Shared washing machine (usage rules apply)"
+      },
+      {
+        "name": "Parking",
+        "description": "Two-wheeler parking (subject to availability)"
+      },
+      {
+        "name": "Power Backup",
+        "description": "Limited power backup for lights & fans"
+      }
+    ]
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "100",
+      "maxAmount": "2500"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": [
+      "Washing machine usage as per allotted time",
+      "Parking is first-come-first-serve",
+      "Internet misuse may lead to restriction",
+      "Damage to facility will be charged"
+    ]
+  },
+  "restrictions": {
+    "commercialUsageAllowed": false,
+    "illegalActivitiesProhibited": true
+  },
+  "agreementCancellationRules": {
+    "tenantCancellation": {
+      "allowed": true,
+      "noticePeriodDays": 30,
+      "earlyExitPenalty": {
+        "type": "MONTH_RENT",
+        "value": 1
+      }
+    }
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": "Nagpur, Maharashtra"
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-13T05:19:54.778Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a0423eb93399e8b84c5bd33"
+  },
+  "planType": "ROOM_AGREEMENT",
+  "planName": "Test Plan",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "8500",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "17000",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": true,
+        "amount": "500",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": true,
+        "amount": "2500",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": true,
+        "amount": "300",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    },
+    "paymentPlan": {
+      "agreementActivationAmount": {
+        "firstInstallment": "37200",
+        "refundableDeposits": "17000",
+        "oneTimeCharges": "2500",
+        "totalActivationAmount": "56700"
+      },
+      "installmentDetails": {
+        "installmentAmount": "37200",
+        "numberOfInstallments": 3,
+        "monthsPerInstallment": 4,
+        "totalMonthlyAmount": "9300",
+        "paymentFrequency": "MONTHLY"
+      },
+      "exitSettlement": {
+        "estimatedRefund": "17000",
+        "potentialDeductions": "0",
+        "netRefundEstimate": "17000"
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-13T07:10:35.146Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-13T07:10:35.146Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a06b45451298feb431d7578"
+  },
+  "planType": "FLAT",
+  "planName": "Test Flat Plan",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "20000",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "50000",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    },
+    "paymentPlan": {
+      "agreementActivationAmount": {
+        "firstInstallment": "80000",
+        "refundableDeposits": "50000",
+        "oneTimeCharges": "0",
+        "totalActivationAmount": "130000"
+      },
+      "installmentDetails": {
+        "installmentAmount": "80000",
+        "numberOfInstallments": 3,
+        "monthsPerInstallment": 4,
+        "totalMonthlyAmount": "20000",
+        "paymentFrequency": "MONTHLY"
+      },
+      "exitSettlement": {
+        "estimatedRefund": "50000",
+        "potentialDeductions": "0",
+        "netRefundEstimate": "50000"
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-15T05:51:16.760Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-15T05:51:16.760Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a08a1203aa5169f677dfe5c"
+  },
+  "planType": "PG_ROOM",
+  "planName": "testRoomPlan",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "8000",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "19000",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    },
+    "paymentPlan": {
+      "agreementActivationAmount": {
+        "firstInstallment": "32000",
+        "refundableDeposits": "19000",
+        "oneTimeCharges": "0",
+        "totalActivationAmount": "51000"
+      },
+      "installmentDetails": {
+        "installmentAmount": "32000",
+        "numberOfInstallments": 3,
+        "monthsPerInstallment": 4,
+        "totalMonthlyAmount": "8000",
+        "paymentFrequency": "MONTHLY"
+      },
+      "exitSettlement": {
+        "estimatedRefund": "19000",
+        "potentialDeductions": "0",
+        "netRefundEstimate": "19000"
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-16T16:53:52.684Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-16T16:53:52.684Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a08c2aa05def6e29926c95f"
+  },
+  "planType": "PG_ROOM",
+  "planName": "NewTestPgPlan",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "inUseFlag": 1,
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "90",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "19",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-16T19:16:58.570Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-16T19:17:42.482Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a08c59f05def6e29926c961"
+  },
+  "planType": "PG_ROOM",
+  "planName": "Test001",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "inUseFlag": 0,
+  "isActive": false,
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "9000",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "0",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    },
+    "paymentPlan": {
+      "agreementActivationAmount": {
+        "firstInstallment": "36000",
+        "refundableDeposits": "0",
+        "oneTimeCharges": "0",
+        "totalActivationAmount": "36000"
+      },
+      "installmentDetails": {
+        "installmentAmount": "36000",
+        "numberOfInstallments": 3,
+        "monthsPerInstallment": 4,
+        "totalMonthlyAmount": "9000",
+        "paymentFrequency": "MONTHLY"
+      },
+      "exitSettlement": {
+        "estimatedRefund": "0",
+        "potentialDeductions": "0",
+        "netRefundEstimate": "0"
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-16T19:29:35.468Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-16T19:29:35.468Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a09f76f219ffe8391ad4d95"
+  },
+  "planType": "PG_ROOM",
+  "planName": "testPopupplan",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "inUseFlag": 1,
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "90",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "0",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    },
+    "paymentPlan": {
+      "agreementActivationAmount": {
+        "firstInstallment": "360",
+        "refundableDeposits": "0",
+        "oneTimeCharges": "0",
+        "totalActivationAmount": "360"
+      },
+      "installmentDetails": {
+        "installmentAmount": "360",
+        "numberOfInstallments": 3,
+        "monthsPerInstallment": 4,
+        "totalMonthlyAmount": "90",
+        "paymentFrequency": "MONTHLY"
+      },
+      "exitSettlement": {
+        "estimatedRefund": "0",
+        "potentialDeductions": "0",
+        "netRefundEstimate": "0"
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-17T17:14:23.578Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-17T17:14:23.578Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a0a05a6219ffe8391ad4d96"
+  },
+  "planType": "PG_ROOM",
+  "planName": ";olkjbhkl",
+  "status": "INACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "inUseFlag": 0,
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "90",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "0",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    },
+    "paymentPlan": {
+      "agreementActivationAmount": {
+        "firstInstallment": "360",
+        "refundableDeposits": "0",
+        "oneTimeCharges": "0",
+        "totalActivationAmount": "360"
+      },
+      "installmentDetails": {
+        "installmentAmount": "360",
+        "numberOfInstallments": 3,
+        "monthsPerInstallment": 4,
+        "totalMonthlyAmount": "90",
+        "paymentFrequency": "MONTHLY"
+      },
+      "exitSettlement": {
+        "estimatedRefund": "0",
+        "potentialDeductions": "0",
+        "netRefundEstimate": "0"
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-17T18:15:02.932Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-17T18:15:02.932Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+},
+{
+  "_id": {
+    "$oid": "6a0c7a1ad20491631b5b9a02"
+  },
+  "planType": "PG_ROOM",
+  "planName": "oiuygtfcghjkllast",
+  "status": "ACTIVE",
+  "ownerId": {
+    "$binary": {
+      "base64": "nkOjVY+AEH7GV3JmGqmzlA==",
+      "subType": "03"
+    }
+  },
+  "inUseFlag": 1,
+  "customFields": {},
+  "duration": {
+    "unit": "MONTH",
+    "value": 12,
+    "minimumStayMonths": 3
+  },
+  "paymentModel": {
+    "mode": "MONTHLY",
+    "paymentTiming": "PREPAID",
+    "installments": 3,
+    "dueDayOfMonth": 5
+  },
+  "rentDetails": {
+    "monthlyRent": "90",
+    "currency": "INR"
+  },
+  "charges": {
+    "securityDeposit": {
+      "amount": "0",
+      "refundable": true,
+      "paymentTiming": "AT_AGREEMENT"
+    },
+    "cleaningCharges": {
+      "deepCleaningOnExit": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_END",
+        "refundable": false
+      },
+      "monthlyCleaningCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "maintenanceCharges": {
+      "included": true,
+      "covers": [],
+      "oneTimeMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "AT_AGREEMENT",
+        "refundable": false
+      },
+      "monthlyMaintenanceCharge": {
+        "applicable": false,
+        "amount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "utilityCharges": {
+      "electricity": {
+        "type": "INCLUDED",
+        "fixedAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      },
+      "water": {
+        "type": "INCLUDED",
+        "monthlyAmount": "0",
+        "paymentTiming": "IN_INSTALLMENTS",
+        "refundable": false
+      }
+    },
+    "customCharges": {
+      "oneTimeCharges": [],
+      "monthlyRecurringCharges": []
+    },
+    "paymentPlan": {
+      "agreementActivationAmount": {
+        "firstInstallment": "360",
+        "refundableDeposits": "0",
+        "oneTimeCharges": "0",
+        "totalActivationAmount": "360"
+      },
+      "installmentDetails": {
+        "installmentAmount": "360",
+        "numberOfInstallments": 3,
+        "monthsPerInstallment": 4,
+        "totalMonthlyAmount": "90",
+        "paymentFrequency": "MONTHLY"
+      },
+      "exitSettlement": {
+        "estimatedRefund": "0",
+        "potentialDeductions": "0",
+        "netRefundEstimate": "0"
+      }
+    }
+  },
+  "freeFacilities": {
+    "included": true,
+    "facilities": []
+  },
+  "latePaymentPolicy": {
+    "gracePeriodDays": 5,
+    "penalty": {
+      "type": "PER_DAY",
+      "amount": "0",
+      "maxAmount": "0"
+    }
+  },
+  "rulesAndRegulations": {
+    "houseRules": {
+      "smokingAllowed": false,
+      "petsAllowed": false,
+      "quietHours": {
+        "from": "22:00",
+        "to": "06:00"
+      }
+    },
+    "facilityUsageRules": []
+  },
+  "legal": {
+    "agreementLock": true,
+    "modificationAllowedAfterSign": false,
+    "jurisdiction": ""
+  },
+  "audit": {
+    "createdAt": {
+      "$date": "2026-05-19T14:56:26.207Z"
+    },
+    "updatedAt": {
+      "$date": "2026-05-19T14:56:26.207Z"
+    }
+  },
+  "_class": "com.krunity.HostelManagment.model.RoomAgreementPlan"
+}]

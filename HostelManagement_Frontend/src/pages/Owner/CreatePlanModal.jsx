@@ -62,10 +62,11 @@ function Section({ title, children }) {
 const inputCls = "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
 const selectCls = inputCls
 
-export default function CreatePlanModal({ onClose, onCreated }) {
-  const [form, setForm] = useState(INITIAL_FORM)
+export default function CreatePlanModal({ onClose, onCreated, editMode = false, planToEdit = null }) {
+  const [form, setForm] = useState(editMode && planToEdit ? planToEdit : INITIAL_FORM)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [alert, setAlert] = useState(null) // { tone, message }
   const [newFacility, setNewFacility] = useState('')
   const [newRule, setNewRule] = useState('')
   const [newCustomKey, setNewCustomKey] = useState('')
@@ -78,6 +79,13 @@ export default function CreatePlanModal({ onClose, onCreated }) {
     const hasConflicts = showExtensionWarning()
     setExtensionWarning(hasConflicts)
   }, [])
+
+  // Initialize form with plan data when editing
+  useEffect(() => {
+    if (editMode && planToEdit) {
+      setForm(planToEdit)
+    }
+  }, [editMode, planToEdit])
 
   const set = (path, value) => {
     try {
@@ -167,6 +175,7 @@ export default function CreatePlanModal({ onClose, onCreated }) {
     try {
       setLoading(true)
       setError('')
+      setAlert(null)
       
       // Enhanced payload structure with validation
       const payload = {
@@ -241,11 +250,26 @@ export default function CreatePlanModal({ onClose, onCreated }) {
         },
       }
       
-      const res = await planService.createPlan(payload)
+      const res = editMode 
+        ? await planService.updatePlan(planToEdit.id, payload)
+        : await planService.createPlan(payload)
       
-      if (onCreated && typeof onCreated === 'function') {
-        onCreated(res.data)
-      }
+      // Show success popup
+      setAlert({ 
+        tone: 'success', 
+        message: editMode 
+          ? '✅ Plan Updated Successfully! Your plan changes have been saved.' 
+          : '✅ Plan Added Successfully! Your tenant plan has been created and is ready to use.' 
+      })
+      
+      // Auto-hide success message and close modal after 3 seconds
+      setTimeout(() => {
+        setAlert(null)
+        if (onCreated && typeof onCreated === 'function') {
+          onCreated(res.data)
+        }
+        onClose()
+      }, 3000)
     } catch (err) {
       // Handle different types of errors
       if (err.name === 'AbortError') {
@@ -253,7 +277,7 @@ export default function CreatePlanModal({ onClose, onCreated }) {
       } else if (err.code === 'NETWORK_ERROR') {
         setError('Network error. Please check your connection and try again.')
       } else {
-        const errorMessage = err?.response?.data?.message || err?.message || 'Failed to create plan.'
+        const errorMessage = err?.response?.data?.message || err?.message || `Failed to ${editMode ? 'update' : 'create'} plan.`
         setError(errorMessage)
       }
     } finally {
@@ -263,6 +287,18 @@ export default function CreatePlanModal({ onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => setAlert(null)}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
+
       <div
         className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl"
         onClick={e => e.stopPropagation()}
@@ -271,7 +307,7 @@ export default function CreatePlanModal({ onClose, onCreated }) {
         <div className="sticky top-0 z-10 flex items-center justify-between bg-white px-6 py-4 border-b border-slate-100">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">Owner workspace</p>
-            <h2 className="text-xl font-bold text-slate-950">Create tenant plan</h2>
+            <h2 className="text-xl font-bold text-slate-950">{editMode ? 'Edit tenant plan' : 'Create tenant plan'}</h2>
           </div>
           <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 transition">✕</button>
         </div>
@@ -424,7 +460,7 @@ export default function CreatePlanModal({ onClose, onCreated }) {
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <Button type="submit" label="Create plan" loading={loading} fullWidth />
+            <Button type="submit" label={editMode ? "Update plan" : "Create plan"} loading={loading} fullWidth />
             <Button type="button" label="Cancel" variant="secondary" fullWidth onClick={onClose} />
           </div>
         </form>

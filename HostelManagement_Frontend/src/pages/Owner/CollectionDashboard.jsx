@@ -15,11 +15,15 @@ import {
 } from '../../components/ui'
 import QuickPaymentConfirmation from '../../components/QuickPaymentConfirmation'
 import PaymentHistoryModal from '../../components/PaymentHistoryModal'
+import OtherChargeDetailsModal from '../../components/OtherChargeDetailsModal'
+import OwnerOtherChargePaymentModal from '../../components/OwnerOtherChargePaymentModal'
 
 export default function CollectionDashboard() {
   const [data, setData] = useState(null)
   const [otherCharges, setOtherCharges] = useState([])
   const [loading, setLoading] = useState(true)
+  const [otherChargesLoading, setOtherChargesLoading] = useState(false)
+  const [otherChargesLoaded, setOtherChargesLoaded] = useState(false)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('installments') // 'installments' or 'other-charges'
@@ -29,11 +33,22 @@ export default function CollectionDashboard() {
   const [loadingInstallment, setLoadingInstallment] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [historyTenant, setHistoryTenant] = useState(null)
+  
+  // Other charges modal states
+  const [showChargeDetails, setShowChargeDetails] = useState(false)
+  const [showChargePayment, setShowChargePayment] = useState(false)
+  const [selectedCharge, setSelectedCharge] = useState(null)
 
   useEffect(() => {
     fetchData()
-    fetchOtherCharges()
   }, [])
+
+  // Fetch data when tab changes
+  useEffect(() => {
+    if (activeTab === 'other-charges' && !otherChargesLoaded) {
+      fetchOtherCharges()
+    }
+  }, [activeTab])
 
   const fetchData = async () => {
     try {
@@ -50,10 +65,14 @@ export default function CollectionDashboard() {
 
   const fetchOtherCharges = async () => {
     try {
+      setOtherChargesLoading(true)
       const res = await otherChargeService.getOwnerCharges()
       setOtherCharges(res.data)
+      setOtherChargesLoaded(true)
     } catch (err) {
       console.error('Failed to load other charges:', err)
+    } finally {
+      setOtherChargesLoading(false)
     }
   }
 
@@ -71,12 +90,29 @@ export default function CollectionDashboard() {
       const res = await ownerReportService.getTenantInstallments(tenant.tenantId)
       const installments = res.data
       
-      // Find the next due installment (SCHEDULED or OVERDUE)
-      const nextDue = installments.find(inst => 
-        inst.paymentStatus === 'SCHEDULED' || 
+      // Find the next due installment - prioritize by status and due date
+      const pendingInstallments = installments.filter(inst => 
         inst.paymentStatus === 'OVERDUE' || 
-        inst.paymentStatus === 'PARTIALLY_PAID'
+        inst.paymentStatus === 'PARTIALLY_PAID' || 
+        inst.paymentStatus === 'SCHEDULED'
       )
+      
+      // Sort by priority: OVERDUE first, then PARTIALLY_PAID, then SCHEDULED
+      // Within same status, sort by due date (earliest first)
+      const nextDue = pendingInstallments.sort((a, b) => {
+        // Priority order: OVERDUE > PARTIALLY_PAID > SCHEDULED
+        const statusPriority = {
+          'OVERDUE': 1,
+          'PARTIALLY_PAID': 2,
+          'SCHEDULED': 3
+        }
+        
+        const priorityDiff = statusPriority[a.paymentStatus] - statusPriority[b.paymentStatus]
+        if (priorityDiff !== 0) return priorityDiff
+        
+        // If same status, sort by due date (earliest first)
+        return new Date(a.dueDate) - new Date(b.dueDate)
+      })[0]
       
       if (nextDue) {
         setSelectedTenant(tenant)
@@ -100,7 +136,39 @@ export default function CollectionDashboard() {
     setSelectedTenant(null)
     setNextInstallment(null)
     fetchData() // Refresh the data
-    fetchOtherCharges() // Refresh other charges
+    if (otherChargesLoaded) {
+      fetchOtherCharges() // Only refresh other charges if they were loaded
+    }
+  }
+
+  const handleChargeDetailsClose = () => {
+    setShowChargeDetails(false)
+    setSelectedCharge(null)
+  }
+
+  const handleChargePaymentClose = () => {
+    setShowChargePayment(false)
+    setSelectedCharge(null)
+  }
+
+  const handleChargeUpdate = () => {
+    fetchOtherCharges() // Refresh other charges data
+    handleChargeDetailsClose()
+  }
+
+  const handleChargePaymentSuccess = () => {
+    fetchOtherCharges() // Refresh other charges data
+    handleChargePaymentClose()
+  }
+
+  const handleViewChargeDetails = (charge) => {
+    setSelectedCharge(charge)
+    setShowChargeDetails(true)
+  }
+
+  const handleCollectChargePayment = (charge) => {
+    setSelectedCharge(charge)
+    setShowChargePayment(true)
   }
 
   const fmt = (a) => `₹${(a ?? 0).toLocaleString()}`
@@ -190,11 +258,36 @@ export default function CollectionDashboard() {
         />
       )}
 
+      {/* Other Charge Details Modal */}
+      {showChargeDetails && selectedCharge && (
+        <OtherChargeDetailsModal
+          charge={selectedCharge}
+          onClose={handleChargeDetailsClose}
+          onUpdate={handleChargeUpdate}
+        />
+      )}
+
+      {/* Other Charge Payment Modal */}
+      {showChargePayment && selectedCharge && (
+        <OwnerOtherChargePaymentModal
+          charge={selectedCharge}
+          onClose={handleChargePaymentClose}
+          onSuccess={handleChargePaymentSuccess}
+        />
+      )}
+
       <PageHeader
         eyebrow="Collections"
         title="Rent collection dashboard"
         description="Track rent collection, overdue payments, and tenant payment status across all your properties."
-        action={<Button label="Refresh" variant="secondary" onClick={fetchData} />}
+        action={<Button label="Refresh" variant="secondary" onClick={() => {
+          if (activeTab === 'other-charges') {
+            setOtherChargesLoaded(false)
+            fetchOtherCharges()
+          } else {
+            fetchData()
+          }
+        }} />}
       />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
@@ -225,7 +318,7 @@ export default function CollectionDashboard() {
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Other Charges ({filteredOtherCharges.length})
+          Other Charges {otherChargesLoading ? '(...)' : activeTab === 'other-charges' || otherCharges.length > 0 ? `(${filteredOtherCharges.length})` : ''}
         </button>
       </div>
 
@@ -364,7 +457,13 @@ export default function CollectionDashboard() {
             )
           ) : (
             // Other Charges Section
-            !otherCharges.length ? (
+            otherChargesLoading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-32 rounded-lg" />
+                ))}
+              </div>
+            ) : !otherCharges.length ? (
               <EmptyState
                 title="No other charges"
                 description="Additional charges will appear here when you create them."
@@ -467,10 +566,7 @@ export default function CollectionDashboard() {
                           label="View Details"
                           variant="secondary"
                           size="sm"
-                          onClick={() => {
-                            // TODO: Open charge details modal
-                            console.log('View charge details:', charge.chargeId)
-                          }}
+                          onClick={() => handleViewChargeDetails(charge)}
                         />
                         
                         {charge.paymentStatus !== 'COMPLETED' && (
@@ -478,10 +574,7 @@ export default function CollectionDashboard() {
                             label="Collect Payment"
                             variant="primary"
                             size="sm"
-                            onClick={() => {
-                              // TODO: Open payment collection modal
-                              console.log('Collect payment for charge:', charge.chargeId)
-                            }}
+                            onClick={() => handleCollectChargePayment(charge)}
                           />
                         )}
                       </div>

@@ -30,6 +30,12 @@ public class CashPaymentOtp {
     @Column(name = "charge_id")
     private String chargeId;
     
+    @Column(name = "settlement_id")
+    private String settlementId;
+    
+    @Column(name = "electricity_bill_id")
+    private UUID electricityBillId;
+    
     @Column(name = "owner_phone", nullable = false)
     private String ownerPhone;
     

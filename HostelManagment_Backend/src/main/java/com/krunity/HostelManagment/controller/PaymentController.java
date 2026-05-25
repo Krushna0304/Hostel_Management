@@ -412,6 +412,30 @@ public class PaymentController {
     }
 
     /**
+     * POST /api/payments/create-settlement-order
+     *
+     * Called by frontend before opening the payment modal for settlement payment.
+     * Returns orderId + providerKey needed to initialize the payment SDK.
+     *
+     * Request body:
+     * {
+     *   "settlementId": "uuid",
+     *   "amount": 8500,
+     *   "currency": "INR"
+     * }
+     */
+    @PostMapping("/create-settlement-order")
+    public ResponseEntity<CreateOrderResponse> createSettlementOrder(@Valid @RequestBody CreateSettlementOrderApiRequest request) {
+        log.info("POST /api/payments/create-settlement-order for settlement: {}", request.getSettlementId());
+        CreateOrderResponse response = paymentService.createSettlementPaymentOrder(
+                request.getSettlementId(),
+                request.getAmount(),
+                request.getCurrency()
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * GET /api/payments/provider
      * Returns the currently active payment provider name.
      */
@@ -421,6 +445,21 @@ public class PaymentController {
     }
 
     // ── Inner request DTOs ──────────────────────────────────────────────────
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CreateSettlementOrderApiRequest {
+        @NotNull
+        private UUID settlementId;
+        
+        @NotNull
+        @Positive
+        private Long amount;
+        
+        @NotBlank
+        private String currency;
+    }
 
     @Data
     public static class CreateOrderApiRequest {

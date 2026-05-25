@@ -11,8 +11,10 @@ public class RoomAllotmentMapper {
                 .roomId(roomAllotment.getRoom().getRoomId().toString())
                 .tenantId(roomAllotment.getTenant().getUserId().toString())
                 .tenantName(roomAllotment.getTenant().getDisplayName())
-//                .plan(roomAllotment.getPlan().getName())
+                .phoneNumber(roomAllotment.getTenant().getPhoneNumber())
+                .planName(null) // Plan info not directly available in RoomAllotment
                 .allotmentDate(roomAllotment.getAllotmentDate())
+                .agreementEndDate(null) // PG rooms don't have fixed end dates
                 .roomAllotmentStatus(roomAllotment.getRoomAllotmentStatus().name())
                 .coTenantNames(null) // PG rooms don't have co-tenants
                 .agreementType("ROOM") // This will be overridden in the service

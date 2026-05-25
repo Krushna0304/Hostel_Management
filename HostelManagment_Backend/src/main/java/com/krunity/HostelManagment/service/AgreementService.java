@@ -228,6 +228,9 @@ public class AgreementService {
 
         Agreement savedAgreement = agreementRepository.save(agreement);
 
+        // Mark plan as in use
+        roomAgreementPlanService.markPlanAsInUse(request.getPlanId());
+
         // --- Resolve room info for notification context ---
         String hostelName = "N/A";
         String roomNumber = room.getRoomNumber() != null ? room.getRoomNumber() : "N/A";
@@ -622,6 +625,15 @@ public class AgreementService {
             return agreementRepository.findByOwnerId(owner.getUserId());
         }
         return agreementRepository.findAll();
+    }
+    
+    public Optional<Agreement> getAgreementById(String agreementId) {
+        User owner = com.krunity.HostelManagment.Utils.ApplicationContext.getUser();
+        if (owner != null) {
+            // Only return agreement if it belongs to the current owner
+            return agreementRepository.findByIdAndOwnerId(agreementId, owner.getUserId());
+        }
+        return agreementRepository.findById(agreementId);
     }
     
     private User getOwnerForAgreement(Agreement agreement) {

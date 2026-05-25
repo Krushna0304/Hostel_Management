@@ -1,0 +1,50 @@
+# ============================================================================
+# HTTP Test File: Overdue Functionality Testing
+# Purpose: Test overdue functionality through API endpoints
+# Instructions: Use with REST Client extension in VS Code or similar tool
+# ============================================================================
+
+### 1. Login as Owner to get auth token
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "owner@example.com",
+  "password": "password123"
+}
+
+### Store the token from response and use it in subsequent requests
+### Replace YOUR_AUTH_TOKEN with actual token from login response
+
+### 2. Get Collection Dashboard Data (should show overdue info)
+GET http://localhost:8080/api/owner/reports/collection-summary
+Authorization: Bearer YOUR_AUTH_TOKEN
+
+### 3. Get Tenant Installments (to see overdue installments)
+GET http://localhost:8080/api/owner/reports/tenant/TENANT_ID/installments
+Authorization: Bearer YOUR_AUTH_TOKEN
+
+### 4. Get Tenant Payment History
+GET http://localhost:8080/api/owner/reports/tenant/TENANT_ID/payment-history
+Authorization: Bearer YOUR_AUTH_TOKEN
+
+### 5. Test Other Charges Overdue
+GET http://localhost:8080/api/owner/other-charges
+Authorization: Bearer YOUR_AUTH_TOKEN
+
+### 6. Login as Tenant to see overdue from tenant perspective
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "tenant@example.com",
+  "password": "password123"
+}
+
+### 7. Get Tenant Dashboard (should show overdue count)
+GET http://localhost:8080/api/tenant/dashboard
+Authorization: Bearer TENANT_AUTH_TOKEN
+
+### 8. Get Tenant Payment Plan (should show overdue installments)
+GET http://localhost:8080/api/tenant/payment-plan
+Authorization: Bearer TENANT_AUTH_TOKEN

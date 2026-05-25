@@ -10,11 +10,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
+@Slf4j
 @Component
 public class PaymentOverdueJob {
 
@@ -32,6 +34,7 @@ public class PaymentOverdueJob {
     @Scheduled(cron = "0 0 9 * * *")
     @Transactional
     public void markOverdueInstallments() {
+        log.info("Payment overdue job started");
         LocalDate today = LocalDate.now();
 
         List<PaymentRequestSchedule> overdueSchedules = scheduleRepository
@@ -53,14 +56,13 @@ public class PaymentOverdueJob {
                 }
             } catch (Exception e) {
                 // Don't fail the whole batch if one lookup fails
-                System.err.println("Failed to apply late fee for schedule "
-                        + schedule.getScheduleId() + ": " + e.getMessage());
+                log.error("Failed to apply late fee for schedule {}: {}", schedule.getScheduleId(), e.getMessage());
             }
         }
 
         if (!overdueSchedules.isEmpty()) {
             scheduleRepository.saveAll(overdueSchedules);
-            System.out.println("Marked " + overdueSchedules.size() + " installments as OVERDUE on " + today);
+            log.info("Marked {} installments as OVERDUE on {}", overdueSchedules.size(), today);
         }
     }
 

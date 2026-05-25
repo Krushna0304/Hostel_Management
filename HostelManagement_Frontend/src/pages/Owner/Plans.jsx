@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { planService } from '../../services/agreementService'
-import { Alert, Badge, Button, Card, CardContent, CardHeader, EmptyState, PageHeader, Skeleton } from '../../components/ui'
+import { Alert, Badge, Button, Card, CardContent, CardHeader, ConfirmationModal, EmptyState, PageHeader, Skeleton } from '../../components/ui'
 import CreatePlanModal from './CreatePlanModal'
 import PlanDetailsModal from '../../components/PlanDetailsModal'
 
@@ -10,17 +11,68 @@ export default function Plans() {
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [activatingId, setActivatingId] = useState(null)
+  const [deactivatingId, setDeactivatingId] = useState(null)
   const [selectedPlan, setSelectedPlan] = useState(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingPlan, setEditingPlan] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  
+  // Confirmation modal states
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [confirmConfig, setConfirmConfig] = useState({
+    message: '',
+    onConfirm: null,
+    variant: 'default',
+    confirmText: 'OK',
+    cancelText: 'Cancel'
+  })
 
-  useEffect(() => { fetchPlans() }, [])
+  useEffect(() => { 
+    let isMounted = true
+    
+    const loadPlans = async () => {
+      if (isMounted) {
+        await fetchPlans()
+      }
+    }
+    
+    loadPlans()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // Handle URL parameters to auto-open plan details
+  useEffect(() => {
+    const planId = searchParams.get('planId')
+    if (planId && plans.length > 0) {
+      const plan = plans.find(p => p.id === planId)
+      if (plan) {
+        handleViewPlan(plan)
+        // Remove the planId from URL after opening the modal
+        setSearchParams({})
+      }
+    }
+  }, [plans, searchParams, setSearchParams])
 
   const fetchPlans = async () => {
     try {
       setLoading(true)
       setError('')
       const res = await planService.getMyPlans()
-      setPlans(res.data || [])
+      const plansData = res.data || []
+      
+      // Sort plans by updated date in descending order (most recent first)
+      const sortedPlans = plansData.sort((a, b) => {
+        const dateA = new Date(a.audit?.updatedAt || a.audit?.createdAt || 0)
+        const dateB = new Date(b.audit?.updatedAt || b.audit?.createdAt || 0)
+        return dateB - dateA // Descending order
+      })
+      
+      setPlans(sortedPlans)
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load plans.')
     } finally {
@@ -28,32 +80,140 @@ export default function Plans() {
     }
   }
 
+  // Helper function to show confirmation dialog
+  const showConfirmation = (message, onConfirm, options = {}) => {
+    setConfirmConfig({
+      message,
+      onConfirm,
+      variant: options.variant || 'default',
+      confirmText: options.confirmText || 'OK',
+      cancelText: options.cancelText || 'Cancel'
+    })
+    setShowConfirmModal(true)
+  }
+
+  const handleConfirmAction = () => {
+    if (confirmConfig.onConfirm) {
+      confirmConfig.onConfirm()
+    }
+    setShowConfirmModal(false)
+    setConfirmConfig({ message: '', onConfirm: null, variant: 'default', confirmText: 'OK', cancelText: 'Cancel' })
+  }
+
+  const handleCancelAction = () => {
+    setShowConfirmModal(false)
+    setConfirmConfig({ message: '', onConfirm: null, variant: 'default', confirmText: 'OK', cancelText: 'Cancel' })
+  }
+
   const handleDelete = async (planId) => {
-    if (!window.confirm('Deactivate this plan? It will no longer appear in agreement creation.')) return
+    const plan = plans.find(p => p.id === planId);
+    if (plan && plan.inUseFlag === 1) {
+      setError('Cannot delete plan that is currently in use by agreements.');
+      return;
+    }
+    
+    showConfirmation(
+      'Delete this plan? It will be permanently removed and cannot be recovered.',
+      async () => {
+        try {
+          setDeletingId(planId)
+          await planService.deletePlan(planId)
+          setPlans(prev => prev.filter(p => p.id !== planId))
+        } catch (err) {
+          setError(err?.response?.data?.message || 'Failed to delete plan.')
+        } finally {
+          setDeletingId(null)
+        }
+      },
+      { variant: 'danger', confirmText: 'Delete', cancelText: 'Cancel' }
+    )
+  }
+
+  const handleActivate = async (planId) => {
     try {
-      setDeletingId(planId)
-      await planService.deletePlan(planId)
-      setPlans(prev => prev.filter(p => p.id !== planId))
+      setActivatingId(planId)
+      await planService.activatePlan(planId)
+      setPlans(prev => prev.map(p => p.id === planId ? { ...p, isActive: true } : p))
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete plan.')
+      setError(err?.response?.data?.message || 'Failed to activate plan.')
     } finally {
-      setDeletingId(null)
+      setActivatingId(null)
     }
   }
 
+  const handleDeactivate = async (planId) => {
+    const plan = plans.find(p => p.id === planId);
+    if (plan && plan.inUseFlag === 1) {
+      setError('Cannot deactivate plan that is currently in use by agreements.');
+      return;
+    }
+    
+    showConfirmation(
+      'Deactivate this plan? It will no longer appear in agreement creation.',
+      async () => {
+        try {
+          setDeactivatingId(planId)
+          await planService.deactivatePlan(planId)
+          setPlans(prev => prev.map(p => p.id === planId ? { ...p, isActive: false } : p))
+        } catch (err) {
+          setError(err?.response?.data?.message || 'Failed to deactivate plan.')
+        } finally {
+          setDeactivatingId(null)
+        }
+      },
+      { variant: 'warning', confirmText: 'Deactivate', cancelText: 'Cancel' }
+    )
+  }
+
   const handleCreated = (newPlan) => {
-    setPlans(prev => [newPlan, ...prev])
+    setPlans(prev => {
+      const updatedPlans = [newPlan, ...prev]
+      // Re-sort to maintain order
+      return updatedPlans.sort((a, b) => {
+        const dateA = new Date(a.audit?.updatedAt || a.audit?.createdAt || 0)
+        const dateB = new Date(b.audit?.updatedAt || b.audit?.createdAt || 0)
+        return dateB - dateA
+      })
+    })
     setShowModal(false)
   }
 
   const handleViewPlan = (plan) => {
+    console.log('handleViewPlan called with plan:', plan)
+    console.log('Setting selectedPlan to:', plan)
+    console.log('Setting showDetailsModal to true')
     setSelectedPlan(plan)
     setShowDetailsModal(true)
+    console.log('State should be updated now')
   }
 
   const handleCloseDetailsModal = () => {
     setShowDetailsModal(false)
     setSelectedPlan(null)
+  }
+
+  const handleEditPlan = (plan) => {
+    setEditingPlan(plan)
+    setShowEditModal(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false)
+    setEditingPlan(null)
+  }
+
+  const handlePlanUpdated = (updatedPlan) => {
+    setPlans(prev => {
+      const updatedPlans = prev.map(p => p.id === updatedPlan.id ? updatedPlan : p)
+      // Re-sort to maintain order after update
+      return updatedPlans.sort((a, b) => {
+        const dateA = new Date(a.audit?.updatedAt || a.audit?.createdAt || 0)
+        const dateB = new Date(b.audit?.updatedAt || b.audit?.createdAt || 0)
+        return dateB - dateA
+      })
+    })
+    setShowEditModal(false)
+    setEditingPlan(null)
   }
 
   if (loading) {
@@ -70,9 +230,32 @@ export default function Plans() {
         <CreatePlanModal onClose={() => setShowModal(false)} onCreated={handleCreated} />
       )}
 
-      {showDetailsModal && selectedPlan && (
-        <PlanDetailsModal plan={selectedPlan} onClose={handleCloseDetailsModal} />
+      {showEditModal && editingPlan && (
+        <CreatePlanModal 
+          onClose={handleCloseEditModal} 
+          onCreated={handlePlanUpdated}
+          editMode={true}
+          planToEdit={editingPlan}
+        />
       )}
+
+      {showDetailsModal && selectedPlan && (
+        <>
+          {console.log('Rendering PlanDetailsModal with:', { showDetailsModal, selectedPlan })}
+          <PlanDetailsModal plan={selectedPlan} onClose={handleCloseDetailsModal} />
+        </>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={handleCancelAction}
+        onConfirm={handleConfirmAction}
+        message={confirmConfig.message}
+        variant={confirmConfig.variant}
+        confirmText={confirmConfig.confirmText}
+        cancelText={confirmConfig.cancelText}
+      />
 
       <PageHeader
         eyebrow="Owner workspace"
@@ -93,26 +276,75 @@ export default function Plans() {
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {plans.map((plan) => (
-            <Card key={plan.id}>
+            <Card 
+              key={plan.id} 
+              className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
+              onClick={(e) => {
+                console.log('Card clicked!', e, plan);
+                handleViewPlan(plan);
+              }}
+            >
               <CardHeader
                 title={plan.planName}
                 description={`${plan.planType || 'ROOM_AGREEMENT'}`}
                 action={
                   <div className="flex items-center gap-2">
-                    <Badge variant="success">ACTIVE</Badge>
-                    <Button
-                      label="View"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleViewPlan(plan)}
-                    />
-                    <Button
-                      label="Delete"
-                      variant="danger"
-                      size="sm"
-                      loading={deletingId === plan.id}
-                      onClick={() => handleDelete(plan.id)}
-                    />
+                    <Badge variant={plan.inUseFlag === 1 ? 'warning' : 'success'}>
+                      {plan.inUseFlag === 1 ? 'IN USE' : 'NEW'}
+                    </Badge>
+                    <Badge variant={plan.isActive ? 'success' : 'neutral'}>
+                      {plan.isActive ? 'ACTIVE' : 'INACTIVE'}
+                    </Badge>
+                    
+                    {/* Edit and Delete buttons only for plans not in use */}
+                    {plan.inUseFlag === 0 && (
+                      <>
+                        <Button
+                          label="Edit"
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditPlan(plan);
+                          }}
+                        />
+                        <Button
+                          label="Delete"
+                          variant="danger"
+                          size="sm"
+                          loading={deletingId === plan.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(plan.id);
+                          }}
+                        />
+                      </>
+                    )}
+                    
+                    {/* Activate/Deactivate buttons for all plans */}
+                    {plan.isActive ? (
+                      <Button
+                        label="Deactivate"
+                        variant="warning"
+                        size="sm"
+                        loading={deactivatingId === plan.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeactivate(plan.id);
+                        }}
+                      />
+                    ) : (
+                      <Button
+                        label="Activate"
+                        variant="success"
+                        size="sm"
+                        loading={activatingId === plan.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleActivate(plan.id);
+                        }}
+                      />
+                    )}
                   </div>
                 }
               />
@@ -124,10 +356,10 @@ export default function Plans() {
                       <p className="mt-1 font-semibold text-slate-950">₹{plan.rentDetails.monthlyRent} {plan.rentDetails.currency}</p>
                     </div>
                   )}
-                  {plan.charges?.securityDeposit?.amount && (
+                  {plan.charges?.securityDeposit !== undefined && (
                     <div className="rounded-2xl bg-slate-50 px-4 py-3">
                       <p className="text-xs uppercase tracking-[0.15em] text-slate-400">Security Deposit</p>
-                      <p className="mt-1 font-semibold text-slate-950">₹{plan.charges.securityDeposit.amount}</p>
+                      <p className="mt-1 font-semibold text-slate-950">₹{plan.charges.securityDeposit.amount || 0}</p>
                     </div>
                   )}
                   {plan.duration && (

@@ -23,6 +23,7 @@ const CreateRoomPage = () => {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [alert, setAlert] = useState(null) // { tone, message }
 
   // Room type options matching the backend enum
   const roomTypeOptions = [
@@ -41,6 +42,7 @@ const CreateRoomPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
+    setAlert(null)
 
     if (!form.roomNumber || !form.roomType || !form.totalBeds || !form.availableBeds) {
       setError('Room number, room type, total beds, and available beds are required.')
@@ -63,9 +65,16 @@ const CreateRoomPage = () => {
         isActive: form.isActive,
       })
 
-      navigate(`/owner/hostels/${hostelId}/floors/${floorId}/rooms`, {
-        state: { hostelId, floorId, hostelName, floorNumber },
-      })
+      // Show success popup
+      setAlert({ tone: 'success', message: '✅ Room Added Successfully! Your room has been created and is ready for tenants.' })
+      
+      // Auto-hide success message and navigate after 3 seconds
+      setTimeout(() => {
+        setAlert(null)
+        navigate(`/owner/hostels/${hostelId}/floors`, {
+          state: { hostelId, floorId, hostelName, floorNumber },
+        })
+      }, 3000)
     } catch (err) {
       const errorData = err.response?.data
       if (errorData && typeof errorData === 'object' && !errorData.message) {
@@ -80,6 +89,18 @@ const CreateRoomPage = () => {
 
   return (
     <div className="space-y-8">
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md">
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => setAlert(null)}
+            className="shadow-lg border-2"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
+
       <PageHeader
         eyebrow="Room setup"
         title={`Add a room to floor ${floorNumber}`}
@@ -89,7 +110,7 @@ const CreateRoomPage = () => {
             label="Back to rooms"
             variant="secondary"
             onClick={() =>
-              navigate(`/owner/hostels/${hostelId}/floors/${floorId}/rooms`, {
+              navigate(`/owner/hostels/${hostelId}/floors`, {
                 state: { hostelId, floorId, hostelName, floorNumber },
               })
             }
@@ -171,7 +192,7 @@ const CreateRoomPage = () => {
                   variant="secondary"
                   fullWidth
                   onClick={() =>
-                    navigate(`/owner/hostels/${hostelId}/floors/${floorId}/rooms`, {
+                    navigate(`/owner/hostels/${hostelId}/floors`, {
                       state: { hostelId, floorId, hostelName, floorNumber },
                     })
                   }

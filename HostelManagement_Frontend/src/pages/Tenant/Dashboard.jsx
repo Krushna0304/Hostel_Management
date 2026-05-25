@@ -14,6 +14,7 @@ import {
 } from '../../components/ui'
 import PaymentModal from '../../components/PaymentModal'
 import PaymentHistoryModal from '../../components/PaymentHistoryModal'
+import SettlementRequestModal from '../../components/SettlementRequestModal'
 
 const statusVariant = (status) => {
   switch (status) {
@@ -471,6 +472,7 @@ export default function TenantDashboard() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
+  const [showSettlementModal, setShowSettlementModal] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -582,6 +584,16 @@ export default function TenantDashboard() {
         />
       )}
 
+      {/* Settlement Request Modal */}
+      {showSettlementModal && agreement && (
+        <SettlementRequestModal
+          isOpen={showSettlementModal}
+          onClose={() => setShowSettlementModal(false)}
+          agreement={agreement}
+          onSuccess={fetchData}
+        />
+      )}
+
       <PageHeader
         eyebrow="Tenant workspace"
         title="Your payment dashboard"
@@ -593,6 +605,13 @@ export default function TenantDashboard() {
                 label="Payment History"
                 variant="secondary"
                 onClick={() => setShowHistory(true)}
+              />
+            )}
+            {agreement && agreement.status === 'ACTIVE' && (
+              <Button
+                label="Request Settlement"
+                variant="outline"
+                onClick={() => setShowSettlementModal(true)}
               />
             )}
             {agreement ? (

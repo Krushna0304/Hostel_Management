@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.sql.Date;
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -14,8 +15,10 @@ public class RoomTenantResponse {
     public  String roomId;
     public  String tenantId;
     public  String tenantName;
-//    public  String tenantPlan;
+    public  String phoneNumber;
+    public  String planName;
     private Date allotmentDate;
+    private LocalDate agreementEndDate; // For FLAT agreements
     private String roomAllotmentStatus;
     
     // For FLAT rooms - co-tenant information

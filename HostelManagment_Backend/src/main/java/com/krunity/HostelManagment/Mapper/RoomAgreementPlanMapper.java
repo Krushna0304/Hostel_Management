@@ -10,6 +10,8 @@ public class RoomAgreementPlanMapper {
         response.setPlanType(plan.getPlanType());
         response.setPlanName(plan.getPlanName());
         response.setStatus(plan.getStatus());
+        response.setInUseFlag(plan.getInUseFlag());
+        response.setIsActive(plan.getIsActive());
         response.setDuration(plan.getDuration());
         response.setPaymentModel(plan.getPaymentModel());
         response.setRentDetails(plan.getRentDetails());

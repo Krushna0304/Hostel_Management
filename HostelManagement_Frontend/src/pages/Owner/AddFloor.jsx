@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import FormInput from '../../components/FormInput'
 import FormSelect from '../../components/FormSelect'
 import Button from '../../components/Button'
+import { Alert } from '../../components/ui'
 import { hostelService, floorService } from '../../services/hostelService'
 
 const AddFloor = () => {
@@ -19,6 +20,7 @@ const AddFloor = () => {
   const [loading, setLoading] = useState(false)
   const [fetchLoading, setFetchLoading] = useState(true)
   const [apiError, setApiError] = useState('')
+  const [alert, setAlert] = useState(null) // { tone, message }
 
   useEffect(() => {
     fetchHostels()
@@ -76,6 +78,7 @@ const AddFloor = () => {
 
     setLoading(true)
     setApiError('')
+    setAlert(null)
 
     try {
       await floorService.createFloor(formData.hostelId, {
@@ -83,8 +86,15 @@ const AddFloor = () => {
         floorNumber: parseInt(formData.floorNumber),
       })
 
-      // Success - redirect to dashboard
-      navigate('/owner/dashboard', { state: { message: 'Floor added successfully!' } })
+      // Show success popup immediately
+      console.log('Floor created successfully, showing popup')
+      setAlert({ tone: 'success', message: '✅ Floor Added Successfully! Your floor has been created and is ready for rooms.' })
+      
+      // Auto-hide success message and navigate after 3 seconds
+      setTimeout(() => {
+        console.log('Auto-hiding popup and navigating')
+        navigate('/owner/dashboard', { state: { message: 'Floor added successfully!' } })
+      }, 3000)
     } catch (error) {
       console.error('Failed to add floor:', error)
       const errorData = error.response?.data
@@ -115,6 +125,22 @@ const AddFloor = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {alert && console.log('Rendering alert:', alert)}
+      {alert ? (
+        <div className="fixed top-4 right-4 z-[9999] max-w-md" style={{ zIndex: 9999 }}>
+          <Alert 
+            tone={alert.tone} 
+            onClose={() => {
+              setAlert(null)
+              navigate('/owner/dashboard', { state: { message: 'Floor added successfully!' } })
+            }}
+            className="shadow-2xl border-4 bg-white"
+          >
+            {alert.message}
+          </Alert>
+        </div>
+      ) : null}
+
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4">
@@ -130,7 +156,7 @@ const AddFloor = () => {
           ) : hostels.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-600 mb-4">No hostels available. Please create a hostel first.</p>
-              <Button label="Create Hostel" onClick={() => navigate('/owner/create-hostel')} />
+              <Button label="Create Hostel" onClick={() => navigate('/owner/hostels/create-hostel')} />
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
@@ -183,6 +209,13 @@ const AddFloor = () => {
                   onClick={() => navigate('/owner/dashboard')}
                   variant="secondary"
                   fullWidth
+                />
+                {/* Test button for popup */}
+                <Button
+                  type="button"
+                  label="Test Popup"
+                  onClick={() => setAlert({ tone: 'success', message: 'Test popup message!' })}
+                  variant="secondary"
                 />
               </div>
             </form>

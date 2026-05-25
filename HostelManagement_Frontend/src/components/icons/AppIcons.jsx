@@ -207,3 +207,11 @@ export function BellIcon(props) {
     </Icon>
   )
 }
+
+export function LightningIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
+    </Icon>
+  )
+}
