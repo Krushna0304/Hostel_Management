@@ -5,8 +5,12 @@ import com.krunity.HostelManagment.model.RoomAgreementPlan;
 import com.krunity.HostelManagment.model.plan.*;
 import com.krunity.HostelManagment.repository.RoomAgreementPlanRepository;
 import com.krunity.HostelManagment.enums.PlanStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -14,21 +18,29 @@ import java.time.Instant;
 import java.util.Arrays;
 
 @Component
+@ConditionalOnProperty(name = "app.plan.initializer.enabled", havingValue = "true", matchIfMissing = true)
 public class PlanDataInitializer implements CommandLineRunner {
+
+        private static final Logger log = LoggerFactory.getLogger(PlanDataInitializer.class);
     
     @Autowired
     private RoomAgreementPlanRepository planRepository;
     
     @Override
     public void run(String... args) {
-        // Check if default plan already exists
-        if (planRepository.findById("PLAN_STANDARD_MONTHLY_V2").isPresent()) {
-            return; // Plan already exists, skip initialization
-        }
-        
-        // Create the default Standard Monthly Room Plan
-        RoomAgreementPlan defaultPlan = createDefaultPlan();
-        planRepository.save(defaultPlan);
+                try {
+                        // Check if default plan already exists
+                        if (planRepository.findById("PLAN_STANDARD_MONTHLY_V2").isPresent()) {
+                                return; // Plan already exists, skip initialization
+                        }
+
+                        // Create the default Standard Monthly Room Plan
+                        RoomAgreementPlan defaultPlan = createDefaultPlan();
+                        planRepository.save(defaultPlan);
+                } catch (DataAccessException ex) {
+                        // Do not fail application startup if MongoDB is temporarily unavailable.
+                        log.warn("Skipping default RoomAgreementPlan initialization because MongoDB is unavailable: {}", ex.getMessage());
+                }
     }
     
     private RoomAgreementPlan createDefaultPlan() {

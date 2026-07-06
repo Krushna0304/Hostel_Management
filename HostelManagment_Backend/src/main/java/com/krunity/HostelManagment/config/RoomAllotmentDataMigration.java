@@ -18,12 +18,17 @@ public class RoomAllotmentDataMigration implements CommandLineRunner {
     private EntityManager entityManager;
 
     @Override
-    @Transactional
     public void run(String... args) {
-        migrateLegacyAllotmentData();
-        fixInflatedScheduleAmounts();
+        try {
+            // Only run data migrations, not schema migrations
+            // Schema is now managed by Hibernate entity definitions
+            fixInflatedScheduleAmounts();
+        } catch (Exception ex) {
+            log.warn("Data migration failed: {}", ex.getMessage());
+        }
     }
 
+    @Transactional
     public void fixInflatedScheduleAmounts() {
         try {
             int updated = entityManager.createNativeQuery("""
@@ -46,7 +51,11 @@ public class RoomAllotmentDataMigration implements CommandLineRunner {
         }
     }
 
+    @Transactional
     public void migrateLegacyAllotmentData() {
+        // Check if allotment_date column exists first
+        boolean allotmentDateColumnExists = columnExists("room_allotments", "allotment_date");
+        
         // 1. Migrate statuses
         try {
             int statusUpdated = entityManager.createNativeQuery("""
@@ -102,29 +111,53 @@ public class RoomAllotmentDataMigration implements CommandLineRunner {
             log.debug("NOTICE_PERIOD migration skipped or not needed: {}", ex.getMessage());
         }
 
-        // 5. Migrate allotment_date to start_date
-        try {
-            int startDateUpdated = entityManager.createNativeQuery("""
-                    UPDATE room_allotments
-                    SET start_date = allotment_date
-                    WHERE start_date IS NULL AND allotment_date IS NOT NULL
-                    """).executeUpdate();
-            if (startDateUpdated > 0) {
-                log.info("Room allotment migration: start_date populated from allotment_date count={}", startDateUpdated);
+        // 5. Migrate allotment_date to start_date (only if column exists)
+        if (allotmentDateColumnExists) {
+            try {
+                int startDateUpdated = entityManager.createNativeQuery("""
+                        UPDATE room_allotments
+                        SET start_date = allotment_date
+                        WHERE start_date IS NULL AND allotment_date IS NOT NULL
+                        """).executeUpdate();
+                if (startDateUpdated > 0) {
+                    log.info("Room allotment migration: start_date populated from allotment_date count={}", startDateUpdated);
+                }
+            } catch (Exception ex) {
+                log.debug("Room allotment start_date migration skipped or not needed: {}", ex.getMessage());
             }
-        } catch (Exception ex) {
-            log.debug("Room allotment start_date migration skipped or not needed: {}", ex.getMessage());
-        }
 
-        // 3. Make allotment_date nullable so inserts without it don't fail
+            // Make allotment_date nullable so inserts without it don't fail
+            try {
+                entityManager.createNativeQuery("""
+                        ALTER TABLE room_allotments 
+                        ALTER COLUMN allotment_date DROP NOT NULL
+                        """).executeUpdate();
+                log.info("Successfully dropped NOT NULL constraint from allotment_date column on room_allotments table");
+            } catch (Exception ex) {
+                log.debug("Could not alter allotment_date column (it may not exist or is already nullable): {}", ex.getMessage());
+            }
+        } else {
+            log.debug("allotment_date column does not exist in room_allotments table, skipping migration");
+        }
+    }
+
+    /**
+     * Check if a column exists in a table
+     */
+    private boolean columnExists(String tableName, String columnName) {
         try {
-            entityManager.createNativeQuery("""
-                    ALTER TABLE room_allotments 
-                    ALTER COLUMN allotment_date DROP NOT NULL
-                    """).executeUpdate();
-            log.info("Successfully dropped NOT NULL constraint from allotment_date column on room_allotments table");
+            @SuppressWarnings("unchecked")
+            java.util.List<Object> result = entityManager.createNativeQuery("""
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = ? AND column_name = ?
+                    """)
+                    .setParameter(1, tableName)
+                    .setParameter(2, columnName)
+                    .getResultList();
+            return !result.isEmpty();
         } catch (Exception ex) {
-            log.debug("Could not alter allotment_date column (it may not exist or is already nullable): {}", ex.getMessage());
+            log.debug("Error checking if column {} exists in {}: {}", columnName, tableName, ex.getMessage());
+            return false;
         }
     }
 }

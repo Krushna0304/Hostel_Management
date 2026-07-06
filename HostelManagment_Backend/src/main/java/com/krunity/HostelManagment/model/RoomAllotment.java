@@ -48,6 +48,9 @@ public class RoomAllotment {
 
     // ─── Schedule ─────────────────────────────────────────────────────────────
 
+    @Column(name = "allotment_date")
+    private LocalDate allotmentDate;
+
     @Column(name = "start_date")
     private LocalDate startDate;
 
