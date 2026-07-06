@@ -24,7 +24,7 @@ public class NotificationService {
     @Autowired
     private SmsService smsService;
     
-    @Value("${app.frontend.url:http://localhost:3000}")
+    @Value("${app.frontend.url:https://hostel-management-dashboard.onrender.com}")
     private String frontendUrl;
     
     @Value("${app.email.enabled:false}")

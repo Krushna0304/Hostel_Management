@@ -108,7 +108,7 @@ public class AgreementController {
         
         Agreement agreement = agreementOpt.get();
         try {
-            String frontendUrl = "http://localhost:3000";
+            String frontendUrl = "https://hostel-management-dashboard.onrender.com";
             String activationUrl = frontendUrl + "/tenant/activate?token=" + agreement.getQrToken();
             String qrCodeBase64 = QrCodeGenerator.generateQrCodeBase64(activationUrl);
             
