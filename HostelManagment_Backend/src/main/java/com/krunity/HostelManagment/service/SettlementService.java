@@ -6,6 +6,7 @@ import com.krunity.HostelManagment.dto.SettlementRequestDto;
 import com.krunity.HostelManagment.dto.SettlementResponseDto;
 import com.krunity.HostelManagment.enums.AgreementStatus;
 import com.krunity.HostelManagment.enums.PaymentStatus;
+import com.krunity.HostelManagment.enums.RoomAllotmentStatus;
 import com.krunity.HostelManagment.enums.SettlementStatus;
 import com.krunity.HostelManagment.exception.ConflictException;
 import com.krunity.HostelManagment.exception.NotFoundException;
@@ -17,11 +18,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -55,6 +58,9 @@ public class SettlementService {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private RoomAllotmentStatusTransitionValidator transitionValidator;
 
     @Transactional
     public SettlementRequest initiateSettlement(SettlementRequestDto requestDto, UUID tenantId) {
@@ -113,6 +119,7 @@ public class SettlementService {
                 .status(SettlementStatus.PENDING_OWNER_REVIEW)
                 .securityDeposit(agreement.getDeposit())
                 .tenantNotes(requestDto.getTenantNotes())
+                .requestedEndDate(requestDto.getRequestedEndDate())
                 .build();
 
         settlement = settlementRepository.save(settlement);
@@ -120,6 +127,9 @@ public class SettlementService {
         // Update agreement status
         agreement.setStatus(AgreementStatus.SETTLEMENT_REQUESTED);
         agreementRepository.save(agreement);
+
+        // Transition allotment → SETTLEMENT_REQUESTED
+        transitionAllotmentOnSettlementRequest(agreement, tenantId);
 
         // Send notification to owner
         notificationService.sendSettlementRequestNotification(owner, tenant, settlement);
@@ -251,6 +261,8 @@ public class SettlementService {
 
         settlement = settlementRepository.save(settlement);
 
+        applySettlementEndDateToAllotment(settlement);
+
         // Notify tenant about approval
         notificationService.sendSettlementApprovalNotification(settlement.getTenant(), settlement);
 
@@ -291,10 +303,11 @@ public class SettlementService {
         agreement.setStatus(AgreementStatus.SETTLED);
         agreementRepository.save(agreement);
 
-        Room room = settlement.getRoom();
-        roomAllotmentRepository.removeTenant(settlement.getTenant().getUserId(),room.getRoomId());
-        room.setAvailableBeds(room.getAvailableBeds() + 1);
-        roomRepository.save(room);
+        // Transition allotment → ON_NOTICE_PERIOD now that payment is done
+        transitionAllotmentToOnNoticePeriod(settlement);
+
+        finalizeAllotmentOnSettlementComplete(settlement);
+
         // Send completion notifications
         notificationService.sendSettlementCompletionNotification(settlement.getOwner(), settlement.getTenant(), settlement);
 
@@ -304,12 +317,29 @@ public class SettlementService {
 
     public List<SettlementResponseDto> getOwnerSettlements(UUID ownerId) {
         List<SettlementRequest> settlements = settlementRepository.findByOwnerOrderByCreatedAtDesc(ownerId);
-        return com.krunity.HostelManagment.Mapper.SettlementMapper.toResponseDtoList(settlements);
+        return settlements.stream()
+                .map(s -> enrichWithAllotment(com.krunity.HostelManagment.Mapper.SettlementMapper.toResponseDto(s), s))
+                .collect(java.util.stream.Collectors.toList());
     }
 
     public List<SettlementResponseDto> getTenantSettlements(UUID tenantId) {
         List<SettlementRequest> settlements = settlementRepository.findByTenantOrderByCreatedAtDesc(tenantId);
-        return com.krunity.HostelManagment.Mapper.SettlementMapper.toResponseDtoList(settlements);
+        return settlements.stream()
+                .map(s -> enrichWithAllotment(com.krunity.HostelManagment.Mapper.SettlementMapper.toResponseDto(s), s))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    private SettlementResponseDto enrichWithAllotment(SettlementResponseDto dto, SettlementRequest settlement) {
+        if (settlement.getTenant() == null || settlement.getAgreementId() == null) return dto;
+        roomAllotmentRepository
+                .findByTenant_UserIdAndAgreementId(settlement.getTenant().getUserId(), settlement.getAgreementId())
+                .ifPresent(allotment -> {
+                    dto.setAllotmentId(allotment.getAllotmentId());
+                    dto.setAllotmentStatus(allotment.getRoomAllotmentStatus().name());
+                    dto.setTenantMarkedLeft(allotment.isTenantMarkedLeft());
+                    dto.setOwnerMarkedLeft(allotment.isOwnerMarkedLeft());
+                });
+        return dto;
     }
 
     private BigDecimal calculateOutstandingRent(String agreementId) {
@@ -389,5 +419,96 @@ public class SettlementService {
         }
 
         return items;
+    }
+
+    private void applySettlementEndDateToAllotment(SettlementRequest settlement) {
+        if (settlement.getRequestedEndDate() == null) {
+            return;
+        }
+
+        int updated = roomAllotmentRepository.updateEndDateByTenantAndAgreement(
+                settlement.getTenant().getUserId(),
+                settlement.getAgreementId(),
+                settlement.getRequestedEndDate());
+
+        if (updated == 0) {
+            log.warn("No active allotment found to set end date for agreement {}", settlement.getAgreementId());
+        }
+    }
+
+    private void finalizeAllotmentOnSettlementComplete(SettlementRequest settlement) {
+        if (settlement.getRoom() == null) {
+            return;
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate endDate = settlement.getRequestedEndDate();
+
+        if (endDate != null && today.isAfter(endDate)) {
+            roomAllotmentRepository.markAllotmentLeft(
+                    settlement.getTenant().getUserId(),
+                    settlement.getRoom().getRoomId(),
+                    settlement.getAgreementId());
+        }
+    }
+
+    // ─── Allotment status transition helpers ──────────────────────────────────
+
+    /**
+     * Transitions the allotment from UPCOMING / ACTIVE / SETTLEMENT_PENDING
+     * → SETTLEMENT_REQUESTED and sets earlyExit + audit fields.
+     */
+    private void transitionAllotmentOnSettlementRequest(Agreement agreement, UUID tenantId) {
+        if (agreement.getRoomId() == null) return;
+
+        roomAllotmentRepository
+                .findByTenant_UserIdAndAgreementIdAndRoomAllotmentStatusIn(
+                        tenantId,
+                        agreement.getId(),
+                        RoomAllotmentStatus.settlementRequestableStatuses())
+                .ifPresent(allotment -> {
+                    transitionValidator.validate(
+                            allotment.getRoomAllotmentStatus(), RoomAllotmentStatus.SETTLEMENT_REQUESTED);
+
+                    // Early exit: tenant requested before the notice-period window opened
+                    if (allotment.getEndDate() != null && allotment.getNoticePeriodMonths() != null) {
+                        LocalDate noticeWindowStart =
+                                allotment.getEndDate().minusMonths(allotment.getNoticePeriodMonths());
+                        allotment.setEarlyExit(LocalDate.now().isBefore(noticeWindowStart));
+                    }
+
+                    allotment.setRoomAllotmentStatus(RoomAllotmentStatus.SETTLEMENT_REQUESTED);
+                    allotment.setSettlementRequestedAt(LocalDateTime.now());
+                    allotment.setLastStatusChangedBy("TENANT");
+                    allotment.setLastStatusChangedAt(LocalDateTime.now());
+                    roomAllotmentRepository.save(allotment);
+                    log.info("Allotment {} transitioned to SETTLEMENT_REQUESTED (earlyExit={})",
+                            allotment.getAllotmentId(), allotment.isEarlyExit());
+                });
+    }
+
+    /**
+     * Transitions the allotment from SETTLEMENT_REQUESTED → ON_NOTICE_PERIOD
+     * after the owner approves.
+     */
+    private void transitionAllotmentToOnNoticePeriod(SettlementRequest settlement) {
+        if (settlement.getRoom() == null) return;
+
+        roomAllotmentRepository
+                .findByTenant_UserIdAndAgreementIdAndRoomAllotmentStatusIn(
+                        settlement.getTenant().getUserId(),
+                        settlement.getAgreementId(),
+                        Set.of(RoomAllotmentStatus.SETTLEMENT_REQUESTED))
+                .ifPresent(allotment -> {
+                    transitionValidator.validate(
+                            allotment.getRoomAllotmentStatus(), RoomAllotmentStatus.ON_NOTICE_PERIOD);
+
+                    allotment.setRoomAllotmentStatus(RoomAllotmentStatus.ON_NOTICE_PERIOD);
+                    allotment.setSettlementApprovedAt(LocalDateTime.now());
+                    allotment.setLastStatusChangedBy("OWNER");
+                    allotment.setLastStatusChangedAt(LocalDateTime.now());
+                    roomAllotmentRepository.save(allotment);
+                    log.info("Allotment {} transitioned to ON_NOTICE_PERIOD", allotment.getAllotmentId());
+                });
     }
 }

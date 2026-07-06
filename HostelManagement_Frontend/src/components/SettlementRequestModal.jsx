@@ -7,6 +7,7 @@ import { useSuccessPopup } from '../hooks/useSuccessPopup';
 
 const SettlementRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
   const [formData, setFormData] = useState({
+    requestedEndDate: '',
     tenantNotes: ''
   });
   const [loading, setLoading] = useState(false);
@@ -36,6 +37,7 @@ const SettlementRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
 
       const settlementData = {
         agreementId: agreement.id,
+        requestedEndDate: formData.requestedEndDate,
         tenantNotes: formData.tenantNotes
       };
 
@@ -137,6 +139,16 @@ const SettlementRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
+          <InputField
+            label="Requested Move-out Date"
+            name="requestedEndDate"
+            type="date"
+            value={formData.requestedEndDate}
+            onChange={handleChange}
+            min={new Date().toISOString().split('T')[0]}
+            required
+          />
+
           <InputField
             label="Notes (Optional)"
             name="tenantNotes"

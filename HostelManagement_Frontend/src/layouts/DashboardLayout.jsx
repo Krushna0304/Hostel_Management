@@ -75,6 +75,14 @@ const titleMap = {
     title: 'Tenant Plans',
     description: 'Create and manage custom rent plans visible only to you.',
   },
+  '/owner/plans/create': {
+    title: 'Create Plan',
+    description: 'Define rent, charges, and payment rules for a new tenant plan.',
+  },
+  '/owner/plans/edit': {
+    title: 'Edit Plan',
+    description: 'Update the billing structure and rules for this tenant plan.',
+  },
   '/owner/payment-settings': {
     title: 'Payment Settings',
     description: 'Configure your Razorpay account to accept online payments.',
@@ -285,7 +293,7 @@ function DashboardLayout() {
           </header>
 
           {/* Page content — only this area scrolls */}
-          <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-10">
+          <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 lg:px-10">
             <div className="mx-auto max-w-7xl">
               <Outlet />
             </div>

@@ -23,7 +23,8 @@ public class AgreementMapper {
                 .roomId(request.getRoomId())
                 .planId(request.getPlanId())
                 .planSnapshot(planSnapshot)
-                .startDate(request.getStartDate());
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate());
         
         // Populate legacy fields from plan snapshot for backward compatibility
         if (planSnapshot != null && planSnapshot.getRentDetails() != null) {
@@ -56,6 +57,7 @@ public class AgreementMapper {
         response.setFacilities(agreement.getFacilities());
         response.setParkingAllowed(agreement.getParkingAllowed());
         response.setStartDate(agreement.getStartDate());
+        response.setEndDate(agreement.getEndDate());
         response.setQrToken(agreement.getQrToken());
         response.setQrExpiry(agreement.getQrExpiry());
         response.setQrUsed(agreement.getQrUsed());
@@ -99,6 +101,7 @@ public class AgreementMapper {
         response.setType(agreement.getType());
         response.setStatus(agreement.getStatus());
         response.setStartDate(agreement.getStartDate());
+        response.setEndDate(agreement.getEndDate());
         response.setCreatedAt(agreement.getCreatedAt() != null ? 
             LocalDateTime.ofInstant(agreement.getCreatedAt(), java.time.ZoneId.systemDefault()) : null);
         response.setActivatedAt(agreement.getActivatedAt() != null ? 

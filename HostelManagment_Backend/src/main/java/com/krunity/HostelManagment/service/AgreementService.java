@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -73,6 +74,9 @@ public class AgreementService {
 
     @Autowired
     private RoomAgreementPlanService roomAgreementPlanService;
+
+    @Autowired
+    private RoomAvailabilityService roomAvailabilityService;
     
     private static final int QR_TOKEN_EXPIRY_HOURS = 72; // 3 days
     
@@ -82,10 +86,14 @@ public class AgreementService {
         User user = userRepository.findById(agreement.getUserId())
                 .orElseThrow(() -> new NotFoundException("User not found with ID: " + agreement.getUserId()));
         
-        // Validate room exists if it's a room agreement
-        if (agreement.getType() == AgreementType.ROOM && agreement.getRoomId() != null) {
+        // Validate room exists and has availability for the agreement start/end dates
+        if (agreement.getRoomId() != null
+                && (agreement.getType() == AgreementType.ROOM || agreement.getType() == AgreementType.FLAT)) {
             roomRepository.findById(agreement.getRoomId())
                     .orElseThrow(() -> new NotFoundException("Room not found with ID: " + agreement.getRoomId()));
+            LocalDate startDate = agreement.getStartDate() != null ? agreement.getStartDate() : LocalDate.now();
+            LocalDate endDate = agreement.getEndDate() != null ? agreement.getEndDate() : startDate.plusYears(1);
+            roomAvailabilityService.validateRoomHasBeds(agreement.getRoomId(), startDate, endDate, 1);
         }
 
         // Stamp the currently logged-in owner on the agreement
@@ -151,45 +159,27 @@ public class AgreementService {
                     "Room " + request.getRoomId() + " is not a FLAT room. Only FLAT rooms can be used for flat agreements.");
         }
 
-        // --- Validate co-tenant count based on available beds ---
+        // --- Validate co-tenant count based on date-aware availability ---
         List<String> coTenantNames = request.getCoTenantNames() != null
                 ? request.getCoTenantNames()
                 : new ArrayList<>();
-        
-        // Check current occupancy from existing active agreements
-        List<Agreement> activeAgreements = agreementRepository.findByRoomIdAndStatusIn(
-                request.getRoomId(), 
-                List.of(AgreementStatus.ACTIVE, AgreementStatus.PENDING_TENANT_ACTION)
-        );
-        
-        int currentOccupancy = 0;
-        for (Agreement agreement : activeAgreements) {
-            currentOccupancy += 1; // Primary tenant
-            if (agreement.getCoTenantNames() != null) {
-                currentOccupancy += agreement.getCoTenantNames().size(); // Co-tenants
-            }
+
+        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+        LocalDate endDate = request.getEndDate() != null ? request.getEndDate() : startDate.plusYears(1);
+        int bedsRequired = 1 + coTenantNames.size();
+        int availableBeds = roomAvailabilityService.getAvailableBeds(request.getRoomId(), startDate, endDate);
+
+        if (availableBeds < bedsRequired) {
+            throw new IllegalArgumentException(String.format(
+                    "Room capacity exceeded from %s to %s. Available beds: %d, required: %d (1 primary + %d co-tenants).",
+                    startDate, endDate, availableBeds, bedsRequired, coTenantNames.size()));
         }
-        
-        int newOccupancy = 1 + coTenantNames.size(); // 1 primary tenant + co-tenants
-        int totalOccupancyAfterAgreement = currentOccupancy + newOccupancy;
-        
-        if (totalOccupancyAfterAgreement > room.getAvailableBeds()) {
-            throw new IllegalArgumentException(
-                    String.format("Room capacity exceeded. Room has %d beds, current occupancy: %d, requested: %d (1 primary + %d co-tenants). Total would be: %d.",
-                            room.getAvailableBeds(), currentOccupancy, newOccupancy, coTenantNames.size(), totalOccupancyAfterAgreement));
-        }
-        
-        // Additional validation: ensure co-tenant count doesn't exceed room capacity even if room is empty
-        int maxCoTenants = room.getAvailableBeds() - 1; // Subtract 1 for primary tenant
-        if (maxCoTenants < 0) {
-            throw new IllegalArgumentException(
-                    "Room " + request.getRoomId() + " has no available beds. Cannot create agreement.");
-        }
-        
+
+        int maxCoTenants = availableBeds - 1;
         if (coTenantNames.size() > maxCoTenants) {
-            throw new IllegalArgumentException(
-                    String.format("Maximum %d co-tenants allowed for this room (%d beds available, 1 reserved for primary tenant). Provided: %d co-tenants.",
-                            maxCoTenants, room.getAvailableBeds(), coTenantNames.size()));
+            throw new IllegalArgumentException(String.format(
+                    "Maximum %d co-tenants allowed for this room from %s to %s (%d beds available, 1 reserved for primary tenant). Provided: %d co-tenants.",
+                    maxCoTenants, startDate, endDate, availableBeds, coTenantNames.size()));
         }
 
         // --- Validate plan exists and is of type FLAT ---
@@ -217,6 +207,7 @@ public class AgreementService {
                 .planId(request.getPlanId())
                 .planSnapshot(plan)
                 .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
                 .coTenantNames(coTenantNames)
                 .ownerId(owner != null ? owner.getUserId() : null)
                 .status(AgreementStatus.PENDING_TENANT_ACTION)
@@ -393,14 +384,16 @@ public class AgreementService {
         PaymentCalculationService.PaymentBreakdown breakdown = 
             paymentCalculationService.calculatePaymentBreakdown(agreement.getPlanSnapshot());
         
-        // Calculate total amount to be paid at agreement time
-        BigDecimal totalAmount = breakdown.getTotalAgreementTime();
-        
+        // Total activation payment = AT_AGREEMENT charges (deposit + one-time) + first installment
+        BigDecimal firstInstallment = BigDecimal.valueOf(paymentPlan.getInstallmentAmount());
+        BigDecimal totalAmount = breakdown.getTotalAgreementTime().add(firstInstallment);
+
         // Fallback to legacy calculation if no plan snapshot
-        if (totalAmount.equals(BigDecimal.ZERO)) {
+        if (totalAmount.equals(firstInstallment)) {
             totalAmount = resolveBaseRent(agreement)
                     .add(defaultAmount(agreement.getDeposit()))
-                    .add(defaultAmount(agreement.getCleaningCharges()));
+                    .add(defaultAmount(agreement.getCleaningCharges()))
+                    .add(firstInstallment);
         }
         
         // Get owner (assuming first user with OWNER role or from room's hostel owner)
@@ -465,20 +458,9 @@ public class AgreementService {
             Room room = roomRepository.findById(agreement.getRoomId())
                     .orElseThrow(() -> new NotFoundException("Room not found with ID: " + agreement.getRoomId()));
 
-            List<RoomAllotment> existingAllotments = roomAllotmentRepository
-                    .findByRoomAndRoomAllotmentStatus(room, RoomAllotmentStatus.CONFIRMED);
-            if (!existingAllotments.isEmpty()) {
-                throw new ConflictException(
-                        "Room is already occupied. An active allotment exists for this flat.");
-            }
-
-            Integer availableBeds = room.getAvailableBeds();
-            if (availableBeds == null || availableBeds <= 0) {
-                throw new IllegalStateException("No beds available for room " + room.getRoomNumber());
-            }
-
-            room.setAvailableBeds(availableBeds - 1);
-            roomRepository.save(room);
+            LocalDate startDate = agreement.getStartDate() != null ? agreement.getStartDate() : LocalDate.now();
+            LocalDate endDate = agreement.getEndDate() != null ? agreement.getEndDate() : startDate.plusYears(1);
+            roomAvailabilityService.validateRoomHasBeds(room.getRoomId(), startDate, endDate, 1);
 
             RoomAllotment allotment = RoomAllotment.builder()
                     .room(room)
@@ -486,10 +468,12 @@ public class AgreementService {
                     .agreementId(agreement.getId())
                     .paymentPlanId(paymentPlan)
                     .depositTransactionId(depositTransaction)
-                    .allotmentDate(java.sql.Date.valueOf(
-                            agreement.getStartDate() != null ? agreement.getStartDate() : LocalDate.now()
-                    ))
-                    .roomAllotmentStatus(RoomAllotmentStatus.CONFIRMED)
+                    .startDate(startDate)
+                    .endDate(agreement.getEndDate())
+                    .roomAllotmentStatus(resolveAllotmentStatus(startDate))
+                    .noticePeriodMonths(resolveNoticePeriodMonths(agreement.getPlanSnapshot()))
+                    .lastStatusChangedBy("SYSTEM")
+                    .lastStatusChangedAt(LocalDateTime.now())
                     .build();
 
             roomAllotmentRepository.save(allotment);
@@ -508,13 +492,9 @@ public class AgreementService {
         Room room = roomRepository.findById(agreement.getRoomId())
                 .orElseThrow(() -> new NotFoundException("Room not found with ID: " + agreement.getRoomId()));
 
-        Integer availableBeds = room.getAvailableBeds();
-        if (availableBeds == null || availableBeds <= 0) {
-            throw new IllegalStateException("No beds available for room " + room.getRoomNumber());
-        }
-
-        room.setAvailableBeds(availableBeds - 1);
-        roomRepository.save(room);
+        LocalDate startDate = agreement.getStartDate() != null ? agreement.getStartDate() : LocalDate.now();
+        LocalDate endDate = agreement.getEndDate() != null ? agreement.getEndDate() : startDate.plusYears(1);
+        roomAvailabilityService.validateRoomHasBeds(room.getRoomId(), startDate, endDate, 1);
 
         RoomAllotment allotment = RoomAllotment.builder()
                 .room(room)
@@ -522,13 +502,35 @@ public class AgreementService {
                 .agreementId(agreement.getId())
                 .paymentPlanId(paymentPlan)
                 .depositTransactionId(depositTransaction)
-                .allotmentDate(java.sql.Date.valueOf(
-                        agreement.getStartDate() != null ? agreement.getStartDate() : LocalDate.now()
-                ))
-                .roomAllotmentStatus(RoomAllotmentStatus.CONFIRMED)
+                .startDate(startDate)
+                .endDate(agreement.getEndDate())
+                .roomAllotmentStatus(resolveAllotmentStatus(startDate))
+                .noticePeriodMonths(resolveNoticePeriodMonths(agreement.getPlanSnapshot()))
+                .lastStatusChangedBy("SYSTEM")
+                .lastStatusChangedAt(LocalDateTime.now())
                 .build();
 
         roomAllotmentRepository.save(allotment);
+    }
+
+    /**
+     * Extracts the notice period in months from the plan snapshot.
+     * The plan stores notice period in days; we convert to whole months (ceil).
+     * Returns null if the plan has no cancellation rules.
+     */
+    private Integer resolveNoticePeriodMonths(com.krunity.HostelManagment.model.RoomAgreementPlan plan) {
+        if (plan == null) return null;
+        var rules = plan.getAgreementCancellationRules();
+        if (rules == null || rules.getTenantCancellation() == null) return null;
+        Integer days = rules.getTenantCancellation().getNoticePeriodDays();
+        if (days == null || days <= 0) return null;
+        return (int) Math.ceil(days / 30.0);
+    }
+
+    private RoomAllotmentStatus resolveAllotmentStatus(LocalDate startDate) {
+        return startDate.isAfter(LocalDate.now())
+                ? RoomAllotmentStatus.UPCOMING
+                : RoomAllotmentStatus.ACTIVE;
     }
 
     private String buildTenantPlanId(Agreement agreement, User tenant) {
@@ -540,6 +542,13 @@ public class AgreementService {
     }
 
     private int resolvePendingInstallments(Agreement agreement) {
+        com.krunity.HostelManagment.model.RoomAgreementPlan snap = agreement.getPlanSnapshot();
+        if (isNotFixedDuration(snap)) {
+            // For NOT_FIXED: generate installments equal to the minimum stay months upfront
+            int minStay = (snap.getDuration().getMinimumStayMonths() != null)
+                    ? snap.getDuration().getMinimumStayMonths() : 1;
+            return Math.max(minStay, 1);
+        }
         if (agreement.getPlanSnapshot() != null
                 && agreement.getPlanSnapshot().getPaymentModel() != null
                 && agreement.getPlanSnapshot().getPaymentModel().getInstallments() != null) {
@@ -559,19 +568,25 @@ public class AgreementService {
     private long resolveInstallmentAmount(Agreement agreement) {
         // Use new payment calculation service
         if (agreement.getPlanSnapshot() != null) {
-            PaymentCalculationService.PaymentBreakdown breakdown = 
+            PaymentCalculationService.PaymentBreakdown breakdown =
                 paymentCalculationService.calculatePaymentBreakdown(agreement.getPlanSnapshot());
-            
+
             if (breakdown.getInstallmentAmount().compareTo(BigDecimal.ZERO) > 0) {
-                return breakdown.getInstallmentAmount().longValue();
+                int monthsPerInstallment = resolveMonthsPerInstallment(agreement.getPlanSnapshot());
+                return breakdown.getInstallmentAmount()
+                        .multiply(BigDecimal.valueOf(monthsPerInstallment))
+                        .longValue();
             }
         }
-        
+
         // Fallback to legacy calculation
         if (agreement.getPlanSnapshot() != null
                 && agreement.getPlanSnapshot().getRentDetails() != null
                 && agreement.getPlanSnapshot().getRentDetails().getMonthlyRent() != null) {
-            return agreement.getPlanSnapshot().getRentDetails().getMonthlyRent().longValue();
+            int monthsPerInstallment = resolveMonthsPerInstallment(agreement.getPlanSnapshot());
+            return agreement.getPlanSnapshot().getRentDetails().getMonthlyRent()
+                    .multiply(BigDecimal.valueOf(monthsPerInstallment))
+                    .longValue();
         }
 
         if (agreement.getRent() != null) {
@@ -579,6 +594,26 @@ public class AgreementService {
         }
 
         throw new IllegalStateException("Agreement rent is required to create a tenant payment plan");
+    }
+
+    private int resolveMonthsPerInstallment(com.krunity.HostelManagment.model.RoomAgreementPlan planSnapshot) {
+        if (isNotFixedDuration(planSnapshot)) {
+            return 1; // Monthly rolling — always 1 month per installment
+        }
+        if (planSnapshot.getDuration() != null && planSnapshot.getPaymentModel() != null
+                && planSnapshot.getDuration().getValue() != null
+                && planSnapshot.getPaymentModel().getInstallments() != null
+                && planSnapshot.getPaymentModel().getInstallments() > 0) {
+            int totalMonths = planSnapshot.getDuration().getValue();
+            int installments = planSnapshot.getPaymentModel().getInstallments();
+            return Math.max(1, (int) Math.ceil((double) totalMonths / installments));
+        }
+        return 1;
+    }
+
+    public static boolean isNotFixedDuration(com.krunity.HostelManagment.model.RoomAgreementPlan planSnapshot) {
+        if (planSnapshot == null || planSnapshot.getDuration() == null) return false;
+        return "NOT_FIXED".equalsIgnoreCase(planSnapshot.getDuration().getDurationType());
     }
 
     private PaymentFrequency resolvePaymentFrequency(Agreement agreement) {

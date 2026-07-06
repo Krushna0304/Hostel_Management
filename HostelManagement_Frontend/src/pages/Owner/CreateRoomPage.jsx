@@ -104,7 +104,7 @@ const CreateRoomPage = () => {
       <PageHeader
         eyebrow="Room setup"
         title={`Add a room to floor ${floorNumber}`}
-        description={`Create a structured room record for ${hostelName}, including beds, availability, and operational status.`}
+        description={`Create a structured room record for ${hostelName}, including beds, availability, and Type.`}
         secondaryAction={
           <Button
             label="Back to rooms"
@@ -122,7 +122,7 @@ const CreateRoomPage = () => {
         <Card>
           <CardHeader title="Room details" description="Use clear identifiers and accurate bed counts to keep occupancy reporting reliable." />
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-0">
               {error ? <Alert tone="error">{error}</Alert> : null}
 
               <div className="grid gap-5 md:grid-cols-2">
@@ -134,7 +134,14 @@ const CreateRoomPage = () => {
                   placeholder="A-101"
                   required
                 />
-                <FormSelect
+                <FormInput
+                  label="Room details"
+                  name="roomDetails"
+                  value={form.roomDetails}
+                  onChange={handleChange}
+                  placeholder="Near staircase, dual occupancy"
+                />
+                 <FormSelect
                   label="Room type"
                   name="roomType"
                   value={form.roomType}
@@ -143,13 +150,20 @@ const CreateRoomPage = () => {
                   placeholder="Select room type"
                   required
                 />
-                <FormInput
-                  label="Room details"
-                  name="roomDetails"
-                  value={form.roomDetails}
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <input
+                  type="checkbox"
+                  name="isActive"
+                  checked={form.isActive}
                   onChange={handleChange}
-                  placeholder="Near staircase, dual occupancy"
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                 />
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Room is active</p>
+                  <p className="text-sm text-slate-500">Uncheck to hide room in Aggrements.
+                  </p>
+                </div>
+              </label>
                 <FormInput
                   label="Total beds"
                   name="totalBeds"
@@ -168,21 +182,11 @@ const CreateRoomPage = () => {
                   required
                   min={0}
                 />
+
+
               </div>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <input
-                  type="checkbox"
-                  name="isActive"
-                  checked={form.isActive}
-                  onChange={handleChange}
-                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                />
-                <div>
-                  <p className="text-sm font-medium text-slate-900">Room is active</p>
-                  <p className="text-sm text-slate-500">Inactive rooms stay visible but won’t appear as active inventory.</p>
-                </div>
-              </label>
+             
 
               <div className="flex flex-col gap-3 pt-4 sm:flex-row">
                 <Button type="submit" label="Add room" loading={loading} fullWidth />

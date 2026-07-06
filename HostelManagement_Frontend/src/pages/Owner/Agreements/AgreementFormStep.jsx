@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import FormInput from "../../../components/FormInput";
 import Button from "../../../components/Button";
 import { hostelService, floorService, roomService } from "../../../services/hostelService";
@@ -23,11 +23,18 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
     roomId: formData.roomId || "",
     planId: formData.planId || "",
     startDate: formData.startDate || "",
+    endDate: formData.endDate || "",
+    mayExtend: Boolean(formData.mayExtend),
     coTenantNames: formData.coTenantNames || [],
   });
 
   const isFlat = formData.agreementType === "FLAT";
   const isRoom = formData.agreementType === "ROOM";
+
+  // Track whether the hostel/floor effects are running for the first time (edit-mode restore).
+  // On first run we only fetch data without resetting the already-restored selections.
+  const hostelInitialized = useRef(false);
+  const floorInitialized = useRef(false);
 
   // Derive the roomType param for fetching
   const getRoomTypeParam = () => {
@@ -55,27 +62,57 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
 
   useEffect(() => {
     if (selectedHostelId) {
+      if (hostelInitialized.current) {
+        // User changed hostel — reset dependent selections
+        setFloors([]);
+        setRooms([]);
+        setSelectedFloorId("");
+        setAgreementData(prev => ({ ...prev, roomId: "" }));
+      }
+      hostelInitialized.current = true;
       fetchFloors(selectedHostelId);
-      setFloors([]);
-      setRooms([]);
-      setSelectedFloorId("");
-      setAgreementData(prev => ({ ...prev, roomId: "" }));
     }
   }, [selectedHostelId]);
 
   useEffect(() => {
-    if (selectedHostelId && selectedFloorId) {
-      fetchRooms(selectedHostelId, selectedFloorId);
-      setAgreementData(prev => ({ ...prev, roomId: "" }));
+    if (selectedFloorId && agreementData.startDate && agreementData.endDate) {
+      if (floorInitialized.current) {
+        // User changed floor or dates — reset room selection
+        setAgreementData(prev => ({ ...prev, roomId: "" }));
+      }
+      floorInitialized.current = true;
+      fetchRooms(selectedFloorId, agreementData.startDate, agreementData.endDate);
+    } else if (floorInitialized.current) {
+      setRooms([]);
     }
-  }, [selectedHostelId, selectedFloorId]);
+  }, [selectedFloorId, agreementData.startDate, agreementData.endDate, formData.agreementType]);
 
   useEffect(() => {
     if (agreementData.planId) {
       const plan = plans.find(p => p.id === agreementData.planId);
       setSelectedPlan(plan || null);
+
+      // For NOT_FIXED plans: auto-compute end date from start + minimumStayMonths
+      if (plan?.duration?.durationType === 'NOT_FIXED' && agreementData.startDate) {
+        const minStay = plan.duration?.minimumStayMonths || 1;
+        const start = new Date(agreementData.startDate);
+        start.setMonth(start.getMonth() + minStay);
+        const autoEnd = start.toISOString().split('T')[0];
+        setAgreementData(prev => ({ ...prev, endDate: autoEnd, mayExtend: true }));
+      }
     }
   }, [agreementData.planId, plans]);
+
+  // Also auto-update end date when startDate changes for NOT_FIXED plans
+  useEffect(() => {
+    if (selectedPlan?.duration?.durationType === 'NOT_FIXED' && agreementData.startDate) {
+      const minStay = selectedPlan.duration?.minimumStayMonths || 1;
+      const start = new Date(agreementData.startDate);
+      start.setMonth(start.getMonth() + minStay);
+      const autoEnd = start.toISOString().split('T')[0];
+      setAgreementData(prev => ({ ...prev, endDate: autoEnd, mayExtend: true }));
+    }
+  }, [agreementData.startDate, selectedPlan]);
 
   const fetchHostels = async () => {
     try {
@@ -95,13 +132,18 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
     }
   };
 
-  const fetchRooms = async (hostelId, floorId) => {
+  const fetchRooms = async (floorId, startDate, endDate) => {
     try {
       const roomType = getRoomTypeParam();
-      const res = await roomService.getActiveRoomsByFloor(hostelId, floorId, roomType);
-      setRooms(res.data || []);
+      const res = await roomService.getAvailableRooms(floorId, startDate, endDate, roomType);
+      const availableRooms = (res.data || []).map((room) => ({
+        ...room,
+        roomNumber: room.roomName || room.roomNumber,
+      }));
+      setRooms(availableRooms);
     } catch (err) {
-      console.error("Failed to fetch rooms", err);
+      console.error("Failed to fetch available rooms", err);
+      setRooms([]);
     }
   };
 
@@ -185,6 +227,22 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
     if (!agreementData.roomId) newErrors.roomId = "Room is required";
     if (!agreementData.planId) newErrors.planId = "Plan is required";
     if (!agreementData.startDate) newErrors.startDate = "Start date is required";
+    if (!agreementData.endDate && selectedPlan?.duration?.durationType !== 'NOT_FIXED') {
+      newErrors.endDate = "Expected end date is required";
+    } else if (agreementData.endDate && agreementData.startDate && selectedPlan) {
+      const start = new Date(agreementData.startDate);
+      const end = new Date(agreementData.endDate);
+      const isNotFixed = selectedPlan.duration?.durationType === 'NOT_FIXED';
+      const requiredMonths = isNotFixed
+        ? (selectedPlan.duration?.minimumStayMonths || 1)
+        : (selectedPlan.duration?.value || 0);
+      const minEnd = new Date(start);
+      minEnd.setMonth(minEnd.getMonth() + requiredMonths);
+      if (end < minEnd) {
+        const label = isNotFixed ? 'minimum stay' : 'plan duration';
+        newErrors.endDate = `End date must be on or after ${minEnd.toLocaleDateString()} (start date + ${requiredMonths} month(s) ${label})`;
+      }
+    }
     return newErrors;
   };
 
@@ -232,7 +290,7 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
     : null;
 
   const plansLoaded = plans.length === 0 && plansEmptyMessage;
-  const roomsLoaded = rooms.length === 0 && roomsEmptyMessage && selectedHostelId && selectedFloorId;
+  const roomsLoaded = rooms.length === 0 && roomsEmptyMessage && selectedHostelId && selectedFloorId && agreementData.startDate && agreementData.endDate;
 
   return (
     <div className="space-y-4 max-h-[600px] overflow-y-auto">
@@ -278,37 +336,7 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
         </div>
       )}
 
-      {/* Room Selection */}
-      {selectedHostelId && selectedFloorId && (
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">
-            Select Room <span className="text-red-500">*</span>
-          </label>
-          {roomsLoaded ? (
-            <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              {roomsEmptyMessage}
-            </p>
-          ) : (
-            <select
-              name="roomId"
-              value={agreementData.roomId}
-              onChange={handleChange}
-              disabled={roomsLoaded}
-              className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="">Select a room</option>
-              {rooms.filter((room) => room.availableBeds > 0).map((room) => (
-                <option key={room.roomId} value={room.roomId}>
-                  Room {room.roomNumber} ({room.availableBeds} beds available)
-                </option>
-              ))}
-            </select>
-          )}
-          {errors.roomId && <p className="text-red-500 text-sm">{errors.roomId}</p>}
-        </div>
-      )}
-
-      {/* Plan Selection */}
+      {/* Plan Selection — moved above dates so end date constraint can be derived */}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-gray-700">
           Select Agreement Plan <span className="text-red-500">*</span>
@@ -329,12 +357,115 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
             {plans.map((plan) => (
               <option key={plan.id} value={plan.id}>
                 {plan.planName} - ₹{plan.rentDetails?.monthlyRent}/month
+                {plan.duration?.durationType === 'NOT_FIXED' ? ' · Monthly rolling' : plan.duration?.value ? ` · ${plan.duration.value} months` : ''}
               </option>
             ))}
           </select>
         )}
         {errors.planId && <p className="text-red-500 text-sm">{errors.planId}</p>}
       </div>
+
+      <FormInput
+        label="Start Date"
+        name="startDate"
+        type="date"
+        value={agreementData.startDate}
+        onChange={handleChange}
+        min={new Date().toISOString().split('T')[0]}
+        required
+        error={errors.startDate}
+      />
+
+      {/* End Date — constrained by plan duration / minimum stay */}
+      {(() => {
+        const isNotFixed = selectedPlan?.duration?.durationType === 'NOT_FIXED'
+        const requiredMonths = isNotFixed
+          ? (selectedPlan?.duration?.minimumStayMonths || 1)
+          : (selectedPlan?.duration?.value || 0)
+        const minEndDate = (() => {
+          if (!agreementData.startDate || !selectedPlan) return new Date().toISOString().split('T')[0]
+          const d = new Date(agreementData.startDate)
+          d.setMonth(d.getMonth() + requiredMonths)
+          return d.toISOString().split('T')[0]
+        })()
+
+        if (isNotFixed) {
+          return (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+              <p className="font-medium">Not Fixed Duration Plan</p>
+              <p className="mt-1 text-xs text-sky-600">
+                End date is auto-set to <strong>{agreementData.endDate || '—'}</strong> (start date + {requiredMonths} month{requiredMonths !== 1 ? 's' : ''} minimum stay). The agreement continues month-to-month beyond that.
+              </p>
+            </div>
+          )
+        }
+
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                Expected End Date <span className="text-red-500">*</span>
+                {selectedPlan && requiredMonths > 0 && (
+                  <span className="ml-2 text-xs font-normal text-slate-400">
+                    (min: start + {requiredMonths} month{requiredMonths !== 1 ? 's' : ''})
+                  </span>
+                )}
+              </label>
+              {isRoom && (
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="mayExtend"
+                    checked={Boolean(agreementData.mayExtend)}
+                    onChange={(e) => setAgreementData((prev) => ({ ...prev, mayExtend: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  May Extend
+                </label>
+              )}
+            </div>
+            <FormInput
+              name="endDate"
+              type="date"
+              value={agreementData.endDate}
+              onChange={handleChange}
+              min={minEndDate}
+              required
+              error={errors.endDate}
+            />
+          </div>
+        )
+      })()}
+
+      {/* Room Selection — requires floor + start + end date */}
+      {selectedHostelId && selectedFloorId && agreementData.startDate && agreementData.endDate && (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Select Room <span className="text-red-500">*</span>
+          </label>
+          {roomsLoaded ? (
+            <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              {roomsEmptyMessage}
+            </p>
+          ) : (
+            <select
+              name="roomId"
+              value={agreementData.roomId}
+              onChange={handleChange}
+              disabled={roomsLoaded}
+              className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="">Select a room</option>
+              {rooms.map((room) => (
+                <option key={room.roomId} value={room.roomId}>
+                  Room {room.roomNumber} ({room.availableBeds} bed{room.availableBeds === 1 ? '' : 's'} available)
+                </option>
+              ))}
+            </select>
+          )}
+          {errors.roomId && <p className="text-red-500 text-sm">{errors.roomId}</p>}
+        </div>
+      )}
 
       {/* Plan Details Display */}
       {selectedPlan && (
@@ -470,17 +601,6 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
           })()}
         </div>
       )}
-
-      <FormInput
-        label="Start Date"
-        name="startDate"
-        type="date"
-        value={agreementData.startDate}
-        onChange={handleChange}
-        min={new Date().toISOString().split('T')[0]}
-        required
-        error={errors.startDate}
-      />
 
       <div className="flex gap-2">
         <Button

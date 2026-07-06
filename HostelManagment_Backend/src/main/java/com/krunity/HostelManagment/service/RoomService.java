@@ -253,7 +253,8 @@ public class RoomService {
             }
         } else {
             // For PG_ROOM, get data from RoomAllotment table (existing logic)
-            List<RoomAllotment> roomAllotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(room, RoomAllotmentStatus.CONFIRMED);
+            List<RoomAllotment> roomAllotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatusIn(
+                    room, RoomAllotmentStatus.occupyingStatuses());
             tenantResponses = roomAllotments.stream()
                     .map(allotment -> {
                         RoomTenantResponse response = RoomAllotmentMapper.mapToRoomTenantResponse(allotment);

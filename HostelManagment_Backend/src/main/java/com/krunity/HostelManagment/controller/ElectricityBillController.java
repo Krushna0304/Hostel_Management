@@ -75,4 +75,35 @@ public class ElectricityBillController {
         ElectricityPaymentDto payment = electricityBillService.recordPayment(request, currentUser.getUserId());
         return ResponseEntity.ok(payment);
     }
+
+    // Send a single cash OTP covering all of the tenant's outstanding bills (pay all)
+    @PostMapping("/payments/pay-all-otp")
+    public ResponseEntity<?> sendPayAllOtp() {
+        User currentUser = ApplicationContext.getUser();
+        String message = electricityBillService.sendPayAllOtp(currentUser.getUserId());
+        return ResponseEntity.ok(java.util.Map.of("message", message));
+    }
+
+    // Owner Collections dashboard
+    @GetMapping("/collections/owner")
+    public ResponseEntity<List<ElectricityCollectionRowDto>> getOwnerCollectionSummary() {
+        User currentUser = ApplicationContext.getUser();
+        return ResponseEntity.ok(
+                electricityBillService.getOwnerCollectionSummary(currentUser.getUserId()));
+    }
+
+    @GetMapping("/collections/history/{tenantId}")
+    public ResponseEntity<List<ElectricityPaymentDto>> getTenantElectricityHistory(
+            @PathVariable UUID tenantId) {
+        User currentUser = ApplicationContext.getUser();
+        return ResponseEntity.ok(
+                electricityBillService.getTenantElectricityHistory(currentUser.getUserId(), tenantId));
+    }
+
+    @PostMapping("/collections/collect/{tenantId}")
+    public ResponseEntity<?> collectTenantDues(@PathVariable UUID tenantId) {
+        User currentUser = ApplicationContext.getUser();
+        int collected = electricityBillService.collectTenantDues(currentUser.getUserId(), tenantId);
+        return ResponseEntity.ok(java.util.Map.of("collected", collected));
+    }
 }

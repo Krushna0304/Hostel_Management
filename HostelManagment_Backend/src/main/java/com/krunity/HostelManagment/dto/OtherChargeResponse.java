@@ -67,6 +67,9 @@ public class OtherChargeResponse {
         private String email;
         private String phoneNumber;
         private BigDecimal splitAmount; // For room-based charges
+        private PaymentStatus paymentStatus; // Share status (PENDING/COMPLETED) for split charges
+        private LocalDateTime paidAt; // When this tenant paid their share
+        private Boolean currentTenant; // True for the tenant viewing their own charges
     }
 
     @Data

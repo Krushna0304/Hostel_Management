@@ -5,10 +5,12 @@ import com.krunity.HostelManagment.dto.InstallmentResponse;
 import com.krunity.HostelManagment.dto.PaymentLedgerResponse;
 import com.krunity.HostelManagment.dto.RecordPaymentRequest;
 import com.krunity.HostelManagment.dto.TenantDashboardResponse;
+import com.krunity.HostelManagment.enums.RoomAllotmentStatus;
 import com.krunity.HostelManagment.model.RoomAllotment;
 import com.krunity.HostelManagment.model.User;
 import com.krunity.HostelManagment.repository.AgreementRepository;
 import com.krunity.HostelManagment.repository.RoomAllotmentRepository;
+import com.krunity.HostelManagment.service.AllotmentService;
 import com.krunity.HostelManagment.service.PaymentScheduleService;
 import com.krunity.HostelManagment.service.TenantDashboardService;
 import jakarta.validation.Valid;
@@ -35,6 +37,9 @@ public class TenantController {
 
     @Autowired
     private AgreementRepository agreementRepository;
+
+    @Autowired
+    private AllotmentService allotmentService;
 
     /**
      * GET /tenant/dashboard
@@ -67,6 +72,36 @@ public class TenantController {
     }
 
     /**
+     * POST /tenant/allotments/{allotmentId}/arrival
+     * Tenant marks their physical arrival, transitioning UPCOMING → ACTIVE.
+     */
+    @PostMapping("/allotments/{allotmentId}/arrival")
+    public ResponseEntity<?> markArrival(@PathVariable java.util.UUID allotmentId) {
+        User tenant = ApplicationContext.getUser();
+        RoomAllotment allotment = allotmentService.markArrival(allotmentId, tenant.getUserId());
+        return ResponseEntity.ok(java.util.Map.of(
+                "allotmentId", allotment.getAllotmentId(),
+                "status", allotment.getRoomAllotmentStatus()
+        ));
+    }
+
+    /**
+     * POST /tenant/allotments/{allotmentId}/confirm-left
+     * Tenant confirms they have physically vacated. LEFT is set only when the owner also confirms.
+     */
+    @PostMapping("/allotments/{allotmentId}/confirm-left")
+    public ResponseEntity<?> confirmLeft(@PathVariable java.util.UUID allotmentId) {
+        User tenant = ApplicationContext.getUser();
+        RoomAllotment allotment = allotmentService.markTenantLeft(allotmentId, tenant.getUserId());
+        return ResponseEntity.ok(java.util.Map.of(
+                "allotmentId", allotment.getAllotmentId(),
+                "status", allotment.getRoomAllotmentStatus(),
+                "tenantMarkedLeft", allotment.isTenantMarkedLeft(),
+                "ownerMarkedLeft", allotment.isOwnerMarkedLeft()
+        ));
+    }
+
+    /**
      * GET /tenant/agreement
      * Returns the full agreement (with planSnapshot) for the logged-in tenant.
      */
@@ -74,11 +109,12 @@ public class TenantController {
     public ResponseEntity<?> getMyAgreement() {
         User tenant = ApplicationContext.getUser();
 
-        // Get active allotment to find agreementId
+        // Search across all non-terminal statuses to find the tenant's current allotment
         RoomAllotment allotment = roomAllotmentRepository
-                .findByTenant_UserIdAndRoomAllotmentStatus(
+                .findByTenant_UserIdAndRoomAllotmentStatusIn(
                         tenant.getUserId(),
-                        com.krunity.HostelManagment.enums.RoomAllotmentStatus.CONFIRMED)
+                        RoomAllotmentStatus.occupyingStatuses())
+                .stream().findFirst()
                 .orElseThrow(() -> new com.krunity.HostelManagment.exception.NotFoundException("No active allotment found"));
 
         String agreementId = allotment.getAgreementId();
@@ -124,11 +160,12 @@ public class TenantController {
             User tenant = ApplicationContext.getUser();
             log.debug("Tenant: {} (ID: {})", tenant.getUsername(), tenant.getUserId());
 
-            // Resolve the owner from the tenant's allotment
+            // Resolve the owner from the tenant's current allotment (any non-terminal status)
             RoomAllotment allotment = roomAllotmentRepository
-                    .findByTenant_UserIdAndRoomAllotmentStatus(
+                    .findByTenant_UserIdAndRoomAllotmentStatusIn(
                             tenant.getUserId(),
-                            com.krunity.HostelManagment.enums.RoomAllotmentStatus.CONFIRMED)
+                            RoomAllotmentStatus.occupyingStatuses())
+                    .stream().findFirst()
                     .orElseThrow(() -> new RuntimeException("No active allotment found"));
 
             User owner = allotment.getRoom().getHostel().getOwner();

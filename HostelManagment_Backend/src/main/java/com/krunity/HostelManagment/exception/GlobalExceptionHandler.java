@@ -65,6 +65,19 @@ public class GlobalExceptionHandler {
                 .body(error);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalArgument(
+            IllegalArgumentException ex) {
+
+        Map<String, String> error = new HashMap<>();
+        error.put("message", ex.getMessage());
+
+        log.warn("Bad request: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(error);
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<Map<String, String>> handleNotfound(
             NotFoundException ex) {

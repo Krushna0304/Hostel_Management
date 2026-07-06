@@ -1,20 +1,39 @@
 package com.krunity.HostelManagment.controller;
 
+import com.krunity.HostelManagment.Utils.ApplicationContext;
+import com.krunity.HostelManagment.dto.CashPaymentAllowDto;
+import com.krunity.HostelManagment.model.User;
 import com.krunity.HostelManagment.service.CashPaymentOtpService;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/cash-payment-otp")
 public class CashPaymentOtpController {
-    
+
     @Autowired
     private CashPaymentOtpService otpService;
-    
+
+    // ── Owner cash-payment settings ─────────────────────────────────────────
+    @GetMapping("/settings")
+    public ResponseEntity<List<CashPaymentAllowDto>> getCashPaymentSettings() {
+        User owner = ApplicationContext.getUser();
+        return ResponseEntity.ok(otpService.getOwnerSettings(owner.getUserId()));
+    }
+
+    @PutMapping("/settings")
+    public ResponseEntity<CashPaymentAllowDto> updateCashPaymentSetting(
+            @RequestBody UpdateSettingRequest request) {
+        User owner = ApplicationContext.getUser();
+        return ResponseEntity.ok(
+                otpService.updateOwnerSetting(owner.getUserId(), request.getMethod(), request.isAllowed()));
+    }
+
     @PostMapping("/send/{agreementId}")
     public ResponseEntity<?> sendOtp(@PathVariable String agreementId) {
         String message = otpService.generateAndSendOtp(agreementId);
@@ -86,6 +105,12 @@ public class CashPaymentOtpController {
     private static class VerifyOtpRequest {
         private String agreementId;
         private String otp;
+    }
+
+    @Data
+    private static class UpdateSettingRequest {
+        private String method;   // CashPaymentMethod enum name
+        private boolean allowed;
     }
     
     @Data

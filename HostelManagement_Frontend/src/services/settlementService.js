@@ -132,6 +132,11 @@ const settlementService = {
       console.error('Error checking recent settlement:', error);
       return null;
     }
+  },
+
+  async ownerConfirmLeft(allotmentId) {
+    const response = await apiClient.post(`/api/settlements/allotments/${allotmentId}/confirm-left`);
+    return response.data;
   }
 };
 

@@ -93,7 +93,7 @@ export default function ElectricityBillCards() {
     return <LoadingScreen />
   }
 
-  if (bills.length === 0) {
+  if (!error && bills.length === 0) {
     return (
       <EmptyState
         title="No electricity bills found"
@@ -141,9 +141,10 @@ export default function ElectricityBillCards() {
           <label className="block text-sm font-medium text-slate-700 mb-1">Month</label>
           <select
             value={monthFilter}
-            onChange={(e) => setMonthFilter(parseInt(e.target.value))}
+            onChange={(e) => setMonthFilter(e.target.value === '' ? '' : parseInt(e.target.value))}
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
           >
+            <option value="">All Months</option>
             {monthOptions.map(month => (
               <option key={month.value} value={month.value}>
                 {month.label}

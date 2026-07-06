@@ -88,17 +88,22 @@ function AgreementModal({ agreement, onClose }) {
                   const water = Number(plan.charges?.utilityCharges?.water?.monthlyAmount) || 0
                   const deepCleaning = Number(plan.charges?.cleaningCharges?.deepCleaningOnExit?.amount) || 0
 
-                  // Calculate custom charges
-                  const customOneTimeCharges = (plan.charges?.customCharges?.oneTimeCharges || []).reduce((total, charge) => {
-                    return total + (Number(charge.amount) || 0)
-                  }, 0)
+                  // Custom one-time charges (fall back to top-level for backward compatibility), split by refundability
+                  const customOneTime = plan.charges?.customCharges?.oneTimeCharges || plan.oneTimeCharges || []
+                  const customRefundableOneTime = customOneTime
+                    .filter(c => c.refundable)
+                    .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+                  const customNonRefundableOneTime = customOneTime
+                    .filter(c => !c.refundable)
+                    .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
 
-                  const customMonthlyRecurringCharges = (plan.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
+                  const customMonthlyRecurringCharges = (plan.charges?.customCharges?.monthlyRecurringCharges || plan.monthlyRecurringCharges || []).reduce((total, charge) => {
                     return total + (Number(charge.amount) || 0)
                   }, 0)
 
                   // Total calculations
-                  const totalOneTimeCharges = oneTimeMaintenance + customOneTimeCharges
+                  const refundableDeposits = securityDeposit + customRefundableOneTime
+                  const totalOneTimeCharges = oneTimeMaintenance + customNonRefundableOneTime
                   const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
                   const monthlyTotal = baseRent + recurringCharges
 
@@ -107,7 +112,7 @@ function AgreementModal({ agreement, onClose }) {
                   const numberOfInstallments = Number(plan.paymentModel?.installments) || 1
                   const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
                   const installmentAmount = monthlyTotal * monthsPerInstallment
-                  const activationTotal = installmentAmount + securityDeposit + totalOneTimeCharges
+                  const activationTotal = installmentAmount + refundableDeposits + totalOneTimeCharges
 
                   return (
                     <div className="space-y-3">
@@ -121,15 +126,15 @@ function AgreementModal({ agreement, onClose }) {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">Refundable Deposits:</span>
-                            <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                            <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">One-time Charges:</span>
                             <span className="font-semibold text-blue-900">₹{totalOneTimeCharges.toLocaleString()}</span>
                           </div>
-                          
-                          {/* Show breakdown of one-time charges */}
-                          {(totalOneTimeCharges > 0) && (
+
+                          {/* Breakdown of non-refundable one-time charges */}
+                          {(oneTimeMaintenance > 0 || customOneTime.some(c => !c.refundable)) && (
                             <div className="ml-4 space-y-1 text-xs text-blue-600">
                               {oneTimeMaintenance > 0 && (
                                 <div className="flex justify-between">
@@ -137,7 +142,7 @@ function AgreementModal({ agreement, onClose }) {
                                   <span>₹{oneTimeMaintenance.toLocaleString()}</span>
                                 </div>
                               )}
-                              {plan.charges?.customCharges?.oneTimeCharges && plan.charges.customCharges.oneTimeCharges.map((charge, index) => (
+                              {customOneTime.filter(c => !c.refundable).map((charge, index) => (
                                 <div key={index} className="flex justify-between">
                                   <span>• {charge.chargeName}:</span>
                                   <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -145,7 +150,25 @@ function AgreementModal({ agreement, onClose }) {
                               ))}
                             </div>
                           )}
-                          
+
+                          {/* Breakdown of refundable deposits */}
+                          {customOneTime.some(c => c.refundable) && (
+                            <div className="ml-4 space-y-1 text-xs text-blue-600">
+                              {securityDeposit > 0 && (
+                                <div className="flex justify-between">
+                                  <span>• Security Deposit:</span>
+                                  <span>₹{securityDeposit.toLocaleString()}</span>
+                                </div>
+                              )}
+                              {customOneTime.filter(c => c.refundable).map((charge, index) => (
+                                <div key={index} className="flex justify-between">
+                                  <span>• {charge.chargeName}:</span>
+                                  <span>₹{Number(charge.amount).toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           <div className="border-t border-blue-200 pt-2 flex justify-between">
                             <span className="font-semibold text-blue-900">Total Activation:</span>
                             <span className="font-bold text-blue-700">₹{activationTotal.toLocaleString()}</span>
@@ -204,7 +227,7 @@ function AgreementModal({ agreement, onClose }) {
                                   <span>₹{water.toLocaleString()}</span>
                                 </div>
                               )}
-                              {plan.charges?.customCharges?.monthlyRecurringCharges && plan.charges.customCharges.monthlyRecurringCharges.map((charge, index) => (
+                              {(plan.charges?.customCharges?.monthlyRecurringCharges || plan.monthlyRecurringCharges || []).map((charge, index) => (
                                 <div key={index} className="flex justify-between">
                                   <span>• {charge.chargeName}:</span>
                                   <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -278,7 +301,7 @@ function AgreementModal({ agreement, onClose }) {
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-slate-600">Refundable Amount:</span>
-                            <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                            <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-600">Potential Deductions:</span>
@@ -286,7 +309,7 @@ function AgreementModal({ agreement, onClose }) {
                           </div>
                           <div className="border-t border-slate-200 pt-2 flex justify-between">
                             <span className="font-semibold text-slate-900">Net Refund Estimate:</span>
-                            <span className="font-bold text-blue-700">₹{(securityDeposit - deepCleaning).toLocaleString()}</span>
+                            <span className="font-bold text-blue-700">₹{(refundableDeposits - deepCleaning).toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
@@ -473,6 +496,10 @@ export default function TenantDashboard() {
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showSettlementModal, setShowSettlementModal] = useState(false)
+  const [confirmingLeft, setConfirmingLeft] = useState(false)
+  const [showConfirmLeft, setShowConfirmLeft] = useState(false)
+  const [markingArrival, setMarkingArrival] = useState(false)
+  const [showConfirmArrival, setShowConfirmArrival] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -508,6 +535,34 @@ export default function TenantDashboard() {
     await fetchData()
   }
 
+  const handleMarkArrival = async () => {
+    try {
+      setMarkingArrival(true)
+      await tenantService.markArrival(dashboard.allotmentId)
+      setShowConfirmArrival(false)
+      await fetchData()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to mark arrival. Please try again.')
+      setShowConfirmArrival(false)
+    } finally {
+      setMarkingArrival(false)
+    }
+  }
+
+  const handleConfirmLeft = async () => {
+    try {
+      setConfirmingLeft(true)
+      await tenantService.confirmLeft(dashboard.allotmentId)
+      setShowConfirmLeft(false)
+      await fetchData()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to confirm vacating. Please try again.')
+      setShowConfirmLeft(false)
+    } finally {
+      setConfirmingLeft(false)
+    }
+  }
+
   const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '—'
   const formatAmount = (a) => `₹${(a ?? 0).toLocaleString()}`
 
@@ -534,11 +589,28 @@ export default function TenantDashboard() {
     )
   }
 
+  const computedInstallmentAmount = (() => {
+    const plan = agreement?.planSnapshot
+    if (!plan) return dashboard?.installmentAmount ?? 0
+    const baseRent = Number(plan.rentDetails?.monthlyRent) || 0
+    const monthlyCleaning = Number(plan.charges?.cleaningCharges?.monthlyCleaningCharge?.amount) || 0
+    const monthlyMaintenance = Number(plan.charges?.maintenanceCharges?.monthlyMaintenanceCharge?.amount) || 0
+    const electricity = Number(plan.charges?.utilityCharges?.electricity?.fixedAmount) || 0
+    const water = Number(plan.charges?.utilityCharges?.water?.monthlyAmount) || 0
+    const customMonthly = (plan.charges?.customCharges?.monthlyRecurringCharges || plan.monthlyRecurringCharges || [])
+      .reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+    const monthlyTotal = baseRent + monthlyCleaning + monthlyMaintenance + electricity + water + customMonthly
+    const totalDuration = Number(plan.duration?.value) || 12
+    const numberOfInstallments = Number(plan.paymentModel?.installments) || 1
+    const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
+    return monthlyTotal * monthsPerInstallment
+  })()
+
   const stats = [
     {
-      label: 'Monthly rent',
-      value: formatAmount(dashboard?.installmentAmount),
-      meta: `${dashboard?.paymentFrequency ?? ''} payments`,
+      label: 'Installment amount',
+      value: formatAmount(computedInstallmentAmount),
+      meta: `Per installment · ${dashboard?.paymentFrequency ?? ''} schedule`,
       icon: null,
     },
     {
@@ -584,6 +656,60 @@ export default function TenantDashboard() {
         />
       )}
 
+      {/* Confirm Arrival Dialog */}
+      {showConfirmArrival && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-500">Confirm arrival</p>
+            <h3 className="mt-2 text-xl font-bold text-slate-950">Mark yourself as arrived?</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              This confirms you have physically moved into your room and your agreement is now active.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <Button
+                label="Cancel"
+                variant="secondary"
+                fullWidth
+                onClick={() => setShowConfirmArrival(false)}
+              />
+              <Button
+                label="Yes, I have arrived"
+                fullWidth
+                loading={markingArrival}
+                onClick={handleMarkArrival}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Left Dialog */}
+      {showConfirmLeft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">Confirm vacating</p>
+            <h3 className="mt-2 text-xl font-bold text-slate-950">Mark yourself as vacated?</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              This confirms you have physically left the room. The owner will also need to confirm before the status moves to LEFT.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <Button
+                label="Cancel"
+                variant="secondary"
+                fullWidth
+                onClick={() => setShowConfirmLeft(false)}
+              />
+              <Button
+                label="Yes, I have vacated"
+                fullWidth
+                loading={confirmingLeft}
+                onClick={handleConfirmLeft}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settlement Request Modal */}
       {showSettlementModal && agreement && (
         <SettlementRequestModal
@@ -614,12 +740,50 @@ export default function TenantDashboard() {
                 onClick={() => setShowSettlementModal(true)}
               />
             )}
+            {dashboard?.allotmentStatus === 'UPCOMING' &&
+              new Date().toLocaleDateString('en-CA') >= (dashboard.startDate?.slice(0, 10) ?? '') && (
+              <Button
+                label="Mark as Arrived"
+                variant="success"
+                onClick={() => setShowConfirmArrival(true)}
+              />
+            )}
+            {dashboard?.allotmentStatus === 'ON_NOTICE_PERIOD' && (
+              <Button
+                label="Mark as Vacated"
+                variant="warning"
+                onClick={() => setShowConfirmLeft(true)}
+              />
+            )}
             {agreement ? (
               <Button label="View Agreement" variant="secondary" onClick={() => setShowAgreement(true)} />
             ) : null}
           </div>
         }
       />
+
+      {/* Upcoming / arrival banner */}
+      {dashboard?.allotmentStatus === 'UPCOMING' && (
+        <div className="rounded-[1.75rem] border border-sky-200 bg-sky-50 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">Room allotted — not yet active</p>
+          <p className="mt-1 text-sm text-sky-800">
+            Your agreement starts on <strong>{new Date(dashboard.startDate).toLocaleDateString()}</strong>.
+            {new Date().toLocaleDateString('en-CA') >= (dashboard.startDate?.slice(0, 10) ?? '')
+              ? <> Once you physically move in, click <strong>"Mark as Arrived"</strong> above to activate your agreement.</>
+              : <> The <strong>"Mark as Arrived"</strong> option will appear on or after your start date.</>}
+          </p>
+        </div>
+      )}
+
+      {/* On notice period banner */}
+      {dashboard?.allotmentStatus === 'ON_NOTICE_PERIOD' && (
+        <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">Notice Period Active</p>
+          <p className="mt-1 text-sm text-amber-800">
+            Your settlement has been approved and payment is complete. Once you physically vacate, click <strong>"Mark as Vacated"</strong> above. The owner will also confirm, after which your allotment will be marked as LEFT.
+          </p>
+        </div>
+      )}
 
       {/* Room info banner */}
       {dashboard && (

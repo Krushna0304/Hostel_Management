@@ -9,6 +9,17 @@ export default function AgreementReviewStep({ prevStep, formData }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
   const [alert, setAlert] = useState(null); // { tone, message }
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyActivationUrl = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   const handleConfirm = async () => {
     setLoading(true);
@@ -22,6 +33,11 @@ export default function AgreementReviewStep({ prevStep, formData }) {
         planId: formData.planId,
         startDate: formData.startDate,
       };
+
+      const shouldSendEndDate = formData.agreementType === 'FLAT' || !formData.mayExtend;
+      if (shouldSendEndDate && formData.endDate) {
+        agreementPayload.endDate = formData.endDate;
+      }
 
       // For FLAT agreements, include coTenantNames and use the flat endpoint
       if (formData.agreementType === 'FLAT') {
@@ -76,7 +92,7 @@ export default function AgreementReviewStep({ prevStep, formData }) {
 
           <div className="bg-white p-4 rounded border-2 border-dashed border-gray-300 text-center">
             <p className="text-sm text-gray-600 mb-2">Share this QR code with the tenant:</p>
-            <div className="bg-white p-4 inline-block rounded flex justify-center">
+            <div className="bg-white p-4 rounded flex justify-center">
               <QRCodeSVG
                 value={`${window.location.origin}/tenant/activate?token=${success.qrToken}`}
                 size={200}
@@ -84,9 +100,26 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                 includeMargin={true}
               />
             </div>
-            <p className="text-xs text-gray-500 mt-2 break-all">
-              Activation URL: {window.location.origin}/tenant/activate?token={success.qrToken}
-            </p>
+            <div className="mt-3 flex flex-col items-center gap-2">
+              <p className="text-xs text-gray-500">Activation URL:</p>
+              <div className="flex w-full max-w-xl items-center gap-2">
+                <a
+                  href={`${window.location.origin}/tenant/activate?token=${success.qrToken}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 break-all rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-blue-600 underline hover:text-blue-800"
+                >
+                  {window.location.origin}/tenant/activate?token={success.qrToken}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCopyActivationUrl(`${window.location.origin}/tenant/activate?token=${success.qrToken}`)}
+                  className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700"
+                >
+                  {copied ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -129,6 +162,7 @@ export default function AgreementReviewStep({ prevStep, formData }) {
           <div><span className="font-semibold">Room Number:</span> {formData.roomNumber || formData.roomId}</div>
           <div className="col-span-2"><span className="font-semibold">Hostel Number:</span> {formData.hostelNumber || formData.hostelId}</div>
           <div className="col-span-2"><span className="font-semibold">Start Date:</span> {formatDate(formData.startDate)}</div>
+          <div className="col-span-2"><span className="font-semibold">Expected End Date:</span> {formData.mayExtend && formData.agreementType === 'ROOM' ? 'May Extend (not fixed)' : formatDate(formData.endDate)}</div>
         </div>
 
         {/* Co-tenants section — shown only for FLAT agreements */}
@@ -167,26 +201,33 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                 const water = Number(formData.plan.charges?.utilityCharges?.water?.monthlyAmount) || 0
                 const deepCleaning = Number(formData.plan.charges?.cleaningCharges?.deepCleaningOnExit?.amount) || 0
 
-                // Calculate custom charges
-                const customOneTimeCharges = (formData.plan.charges?.customCharges?.oneTimeCharges || []).reduce((total, charge) => {
-                  return total + (Number(charge.amount) || 0)
-                }, 0)
+                // Custom one-time charges (fall back to top-level for backward compatibility), split by refundability
+                const customOneTime = formData.plan.charges?.customCharges?.oneTimeCharges || formData.plan.oneTimeCharges || []
+                const customRefundableOneTime = customOneTime
+                  .filter(c => c.refundable)
+                  .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+                const customNonRefundableOneTime = customOneTime
+                  .filter(c => !c.refundable)
+                  .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
 
-                const customMonthlyRecurringCharges = (formData.plan.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
+                const customMonthlyRecurringCharges = (formData.plan.charges?.customCharges?.monthlyRecurringCharges || formData.plan.monthlyRecurringCharges || []).reduce((total, charge) => {
                   return total + (Number(charge.amount) || 0)
                 }, 0)
 
                 // Total calculations
-                const totalOneTimeCharges = oneTimeMaintenance + customOneTimeCharges
+                const refundableDeposits = securityDeposit + customRefundableOneTime
+                const totalOneTimeCharges = oneTimeMaintenance + customNonRefundableOneTime
                 const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
                 const monthlyTotal = baseRent + recurringCharges
 
                 // Calculate installment details
-                const totalDuration = Number(formData.plan.duration?.value) || 12
-                const numberOfInstallments = Number(formData.plan.paymentModel?.installments) || 1
-                const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
+                const isNotFixed = formData.plan.duration?.durationType === 'NOT_FIXED'
+                const totalDuration = isNotFixed ? null : (Number(formData.plan.duration?.value) || 12)
+                const minStay = Number(formData.plan.duration?.minimumStayMonths) || 1
+                const numberOfInstallments = isNotFixed ? minStay : (Number(formData.plan.paymentModel?.installments) || 1)
+                const monthsPerInstallment = isNotFixed ? 1 : Math.ceil(totalDuration / numberOfInstallments)
                 const installmentAmount = monthlyTotal * monthsPerInstallment
-                const activationTotal = installmentAmount + securityDeposit + totalOneTimeCharges
+                const activationTotal = installmentAmount + refundableDeposits + totalOneTimeCharges
 
                 return (
                   <div className="space-y-3">
@@ -200,15 +241,15 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-blue-700">Refundable Deposits:</span>
-                          <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                          <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-blue-700">One-time Charges:</span>
                           <span className="font-semibold text-blue-900">₹{totalOneTimeCharges.toLocaleString()}</span>
                         </div>
-                        
-                        {/* Show breakdown of one-time charges */}
-                        {(totalOneTimeCharges > 0) && (
+
+                        {/* Breakdown of non-refundable one-time charges */}
+                        {(oneTimeMaintenance > 0 || customOneTime.some(c => !c.refundable)) && (
                           <div className="ml-3 space-y-1 text-xs text-blue-600">
                             {oneTimeMaintenance > 0 && (
                               <div className="flex justify-between">
@@ -216,7 +257,7 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                                 <span>₹{oneTimeMaintenance.toLocaleString()}</span>
                               </div>
                             )}
-                            {formData.plan.charges?.customCharges?.oneTimeCharges && formData.plan.charges.customCharges.oneTimeCharges.map((charge, index) => (
+                            {customOneTime.filter(c => !c.refundable).map((charge, index) => (
                               <div key={index} className="flex justify-between">
                                 <span>• {charge.chargeName}:</span>
                                 <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -224,7 +265,25 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                             ))}
                           </div>
                         )}
-                        
+
+                        {/* Breakdown of refundable deposits */}
+                        {customOneTime.some(c => c.refundable) && (
+                          <div className="ml-3 space-y-1 text-xs text-blue-600">
+                            {securityDeposit > 0 && (
+                              <div className="flex justify-between">
+                                <span>• Security Deposit:</span>
+                                <span>₹{securityDeposit.toLocaleString()}</span>
+                              </div>
+                            )}
+                            {customOneTime.filter(c => c.refundable).map((charge, index) => (
+                              <div key={index} className="flex justify-between">
+                                <span>• {charge.chargeName}:</span>
+                                <span>₹{Number(charge.amount).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         <div className="border-t border-blue-300 pt-1 flex justify-between">
                           <span className="font-semibold text-blue-900">Total Activation:</span>
                           <span className="font-bold text-blue-800">₹{activationTotal.toLocaleString()}</span>
@@ -272,7 +331,7 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                                 <span>₹{water.toLocaleString()}</span>
                               </div>
                             )}
-                            {formData.plan.charges?.customCharges?.monthlyRecurringCharges && formData.plan.charges.customCharges.monthlyRecurringCharges.map((charge, index) => (
+                            {(formData.plan.charges?.customCharges?.monthlyRecurringCharges || formData.plan.monthlyRecurringCharges || []).map((charge, index) => (
                               <div key={index} className="flex justify-between">
                                 <span>• {charge.chargeName}:</span>
                                 <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -318,7 +377,7 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                       <div className="space-y-1 text-xs">
                         <div className="flex justify-between">
                           <span className="text-slate-700">Refundable Amount:</span>
-                          <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                          <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-700">Potential Deductions:</span>
@@ -326,7 +385,7 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                         </div>
                         <div className="border-t border-slate-300 pt-1 flex justify-between">
                           <span className="font-semibold text-slate-900">Net Refund Estimate:</span>
-                          <span className="font-bold text-blue-700">₹{(securityDeposit - deepCleaning).toLocaleString()}</span>
+                          <span className="font-bold text-blue-700">₹{(refundableDeposits - deepCleaning).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -361,8 +420,9 @@ export default function AgreementReviewStep({ prevStep, formData }) {
               <div className="bg-white p-3 rounded border">
                 <p className="font-semibold text-sm mb-2">📅 Duration</p>
                 <div className="text-xs">
-                  {formData.plan.duration.value} {formData.plan.duration.unit}(s)
-                  {formData.plan.duration.minimumStayMonths && ` (Minimum ${formData.plan.duration.minimumStayMonths} months)`}
+                  {formData.plan.duration.durationType === 'NOT_FIXED'
+                    ? `Not fixed · Monthly rolling · Minimum ${formData.plan.duration.minimumStayMonths || 1} month(s)`
+                    : `${formData.plan.duration.value} ${formData.plan.duration.unit}(s)${formData.plan.duration.minimumStayMonths ? ` (Minimum ${formData.plan.duration.minimumStayMonths} months)` : ''}`}
                 </div>
               </div>
             )}

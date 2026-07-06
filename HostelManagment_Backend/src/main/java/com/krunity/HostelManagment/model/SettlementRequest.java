@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -48,6 +49,9 @@ public class SettlementRequest {
     @Column(name = "status", nullable = false)
     @Builder.Default
     private SettlementStatus status = SettlementStatus.PENDING_OWNER_REVIEW;
+
+    @Column(name = "requested_end_date")
+    private LocalDate requestedEndDate;
 
     // Financial Summary
     @Column(name = "security_deposit", precision = 10, scale = 2)

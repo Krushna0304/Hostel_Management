@@ -7,8 +7,15 @@ export default function OtherChargeDetailsModal({ charge, onClose, onUpdate }) {
   const [error, setError] = useState('')
   const [collectingPayment, setCollectingPayment] = useState(false)
 
+  // Room (split) charges carry per-tenant shares with their own status.
+  const isSplitCharge =
+    charge.category === 'OTHER_CHARGE_ROOM' &&
+    !charge.installmentEnabled &&
+    Array.isArray(charge.roomTenants) &&
+    charge.roomTenants.some((t) => t.paymentStatus)
+
   const handleCollectCashPayment = async (installmentId = null) => {
-    const amount = installmentId ? 
+    const amount = installmentId ?
       charge.installments.find(i => i.installmentId === installmentId)?.remainingAmount :
       charge.remainingAmount
 
@@ -33,6 +40,25 @@ export default function OtherChargeDetailsModal({ charge, onClose, onUpdate }) {
         })
       }
 
+      onUpdate()
+      onClose()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to record payment')
+    } finally {
+      setCollectingPayment(false)
+    }
+  }
+
+  // Collect a single tenant's share of a room (split) charge.
+  const handleCollectShare = async (tenant) => {
+    try {
+      setCollectingPayment(true)
+      setError('')
+      await otherChargeService.recordCashPayment(charge.chargeId, {
+        tenantId: tenant.tenantId,
+        amount: tenant.splitAmount,
+        notes: 'Cash payment collected by owner'
+      })
       onUpdate()
       onClose()
     } catch (err) {
@@ -182,7 +208,7 @@ export default function OtherChargeDetailsModal({ charge, onClose, onUpdate }) {
                       <span className="font-medium">Room {charge.roomNumber}</span>
                     </div>
                     
-                    {charge.roomTenants && charge.roomTenants.length > 0 && (
+                    {charge.roomTenants && charge.roomTenants.length > 0 && !isSplitCharge && (
                       <div>
                         <span className="text-slate-600">Current Tenants ({charge.roomTenants.length}):</span>
                         <div className="mt-1 space-y-1">
@@ -263,6 +289,56 @@ export default function OtherChargeDetailsModal({ charge, onClose, onUpdate }) {
             </div>
           )}
 
+          {/* Per-tenant shares (room split charge) */}
+          {isSplitCharge && (
+            <div className="space-y-4">
+              <h3 className="font-medium text-slate-900">Tenant Shares</h3>
+
+              <div className="bg-slate-50 rounded-lg p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-sm text-slate-600">
+                    Paid: {charge.roomTenants.filter(t => t.paymentStatus === 'COMPLETED').length} / {charge.roomTenants.length}
+                  </span>
+                  <span className="text-sm font-medium">{fmt(charge.amount)} total</span>
+                </div>
+
+                <div className="space-y-3">
+                  {charge.roomTenants.map((tenant, idx) => {
+                    const paid = tenant.paymentStatus === 'COMPLETED'
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-white rounded border">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${paid ? 'bg-green-500' : 'bg-slate-300'}`} />
+                          <div>
+                            <div className="text-sm font-medium">{tenant.tenantName}</div>
+                            <div className="text-xs text-slate-600">
+                              {paid
+                                ? `Paid${tenant.paidAt ? ' on ' + new Date(tenant.paidAt).toLocaleDateString() : ''}`
+                                : 'Pending'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm font-medium">{fmt(tenant.splitAmount)}</div>
+                          {!paid && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleCollectShare(tenant)}
+                              disabled={collectingPayment}
+                            >
+                              {collectingPayment ? 'Processing...' : 'Collect Cash'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-slate-200">
             <Button
@@ -283,7 +359,7 @@ export default function OtherChargeDetailsModal({ charge, onClose, onUpdate }) {
                   {loading ? 'Sending...' : 'Send Reminder'}
                 </Button>
                 
-                {!charge.installmentEnabled && (
+                {!charge.installmentEnabled && !isSplitCharge && (
                   <Button
                     onClick={() => handleCollectCashPayment()}
                     disabled={collectingPayment}

@@ -40,6 +40,7 @@ const Register = () => {
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required'
     if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required'
     if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required'
+    else if (formData.phoneNumber.length !== 10) newErrors.phoneNumber = 'Phone number must be exactly 10 digits'
     if (!formData.username.trim()) newErrors.username = 'Username is required'
     if (!formData.password.trim()) newErrors.password = 'Password is required'
     if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters'
@@ -104,10 +105,10 @@ const Register = () => {
         </p>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-3">
         {apiError ? <Alert tone="error">{apiError}</Alert> : null}
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <FormInput
             label="First name"
             name="firstName"
@@ -135,9 +136,14 @@ const Register = () => {
           label="Phone number"
           name="phoneNumber"
           type="tel"
+          inputMode="numeric"
           value={formData.phoneNumber}
-          onChange={handleChange}
-          placeholder="+91 98765 43210"
+          onChange={(e) => {
+            const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+            handleChange({ target: { name: 'phoneNumber', value: digits } })
+          }}
+          placeholder="9876543210"
+          maxLength={10}
           required
           error={errors.phoneNumber}
         />
@@ -164,7 +170,7 @@ const Register = () => {
           error={errors.role}
         />
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <FormInput
             label="Password"
             name="password"

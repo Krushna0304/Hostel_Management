@@ -13,6 +13,7 @@ import java.util.List;
 @Builder
 public class RoomTenantResponse {
     public  String roomId;
+    public  String allotmentId;
     public  String tenantId;
     public  String tenantName;
     public  String phoneNumber;

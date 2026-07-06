@@ -5,8 +5,44 @@ import { InputField } from '../../components/ui/InputField'
 import { Alert } from '../../components/ui/Alert'
 import { PageHeader } from '../../components/ui/PageHeader'
 import paymentSettingsService from '../../services/paymentSettingsService'
+import cashPaymentSettingsService from '../../services/cashPaymentSettingsService'
 
 const PaymentSettings = () => {
+  const [cashSettings, setCashSettings] = useState([])
+  const [cashLoading, setCashLoading] = useState(true)
+  const [savingMethod, setSavingMethod] = useState(null)
+
+  useEffect(() => {
+    loadCashSettings()
+  }, [])
+
+  const loadCashSettings = async () => {
+    try {
+      setCashLoading(true)
+      const data = await cashPaymentSettingsService.getSettings()
+      setCashSettings(data)
+    } catch (error) {
+      console.error('Failed to load cash payment settings:', error)
+    } finally {
+      setCashLoading(false)
+    }
+  }
+
+  const handleToggleCash = async (method, nextAllowed) => {
+    // optimistic update
+    setCashSettings((prev) => prev.map((s) => (s.method === method ? { ...s, allowed: nextAllowed } : s)))
+    try {
+      setSavingMethod(method)
+      await cashPaymentSettingsService.updateSetting(method, nextAllowed)
+    } catch (error) {
+      // revert on failure
+      setCashSettings((prev) => prev.map((s) => (s.method === method ? { ...s, allowed: !nextAllowed } : s)))
+      console.error('Failed to update cash payment setting:', error)
+    } finally {
+      setSavingMethod(null)
+    }
+  }
+
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [testLoading, setTestLoading] = useState(false)
@@ -361,6 +397,55 @@ const PaymentSettings = () => {
             </div>
           </Card>
         )}
+
+        {/* Cash Payments (OTP) Card */}
+        <Card>
+          <div className="p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-1">Cash Payments (OTP)</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Allow tenants to pay these in cash, verified by an OTP sent to your phone. Disabled
+              methods can only be paid online.
+            </p>
+
+            {cashLoading ? (
+              <div className="animate-pulse space-y-3">
+                {[1, 2, 3].map((i) => <div key={i} className="h-14 bg-gray-100 rounded-lg" />)}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {cashSettings.map((s) => (
+                  <div
+                    key={s.method}
+                    className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">{s.displayName}</p>
+                      <p className="text-xs text-gray-500">
+                        {s.allowed ? 'Cash via OTP enabled' : 'Cash via OTP disabled'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={s.allowed}
+                      disabled={savingMethod === s.method}
+                      onClick={() => handleToggleCash(s.method, !s.allowed)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                        s.allowed ? 'bg-green-600' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          s.allowed ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
 
         {/* Security Notice */}
         <Card>

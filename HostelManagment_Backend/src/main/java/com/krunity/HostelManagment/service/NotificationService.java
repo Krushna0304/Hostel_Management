@@ -1,6 +1,7 @@
 package com.krunity.HostelManagment.service;
 
 import com.krunity.HostelManagment.model.Agreement;
+import com.krunity.HostelManagment.model.RoomAllotment;
 import com.krunity.HostelManagment.model.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -427,6 +428,79 @@ public class NotificationService {
         }
     }
     
+    // ─── Allotment lifecycle reminders ───────────────────────────────────────
+
+    /**
+     * Sent by the cron job when an allotment enters SETTLEMENT_PENDING.
+     * Reminds the tenant that their agreement is nearing its end date.
+     */
+    public void sendSettlementPendingReminder(User tenant, RoomAllotment allotment) {
+        String roomNumber = allotment.getRoom() != null ? allotment.getRoom().getRoomNumber() : "N/A";
+        String endDate   = allotment.getEndDate() != null ? allotment.getEndDate().toString() : "N/A";
+
+        String body = String.format(
+            "Dear %s,\n" +
+            "Your hostel agreement for room %s is approaching its end date (%s).\n\n" +
+            "Please log in to your tenant portal and submit a settlement request if you plan to vacate.\n" +
+            "Portal: %s\n\n- Hostel Management",
+            tenant.getDisplayName(), roomNumber, endDate,
+            frontendUrl + "/tenant/settlements"
+        );
+
+        trySendSms(tenant.getPhoneNumber(), body, "settlement-pending reminder");
+    }
+
+    /**
+     * Sent to the owner when a tenant requests settlement (SETTLEMENT_REQUESTED).
+     */
+    public void sendSettlementRequestedOwnerReminder(User owner, RoomAllotment allotment) {
+        String tenantName = allotment.getTenant() != null ? allotment.getTenant().getDisplayName() : "N/A";
+        String roomNumber = allotment.getRoom()   != null ? allotment.getRoom().getRoomNumber()   : "N/A";
+
+        String body = String.format(
+            "Dear %s,\n" +
+            "Tenant %s (Room %s) has requested settlement. " +
+            "Please review and approve it in your owner portal.\n" +
+            "Portal: %s\n\n- Hostel Management",
+            owner.getDisplayName(), tenantName, roomNumber,
+            frontendUrl + "/owner/settlements"
+        );
+
+        trySendSms(owner.getPhoneNumber(), body, "settlement-requested owner reminder");
+    }
+
+    /**
+     * Sent to whichever party (TENANT or OWNER) has not yet confirmed departure.
+     *
+     * @param recipient   the user who needs to confirm
+     * @param allotment   the allotment awaiting confirmation
+     * @param waitingFor  "TENANT" or "OWNER" — the role of the recipient
+     */
+    public void sendLeftConfirmationPendingReminder(User recipient, RoomAllotment allotment, String waitingFor) {
+        String roomNumber = allotment.getRoom() != null ? allotment.getRoom().getRoomNumber() : "N/A";
+        String portalPath = "TENANT".equals(waitingFor)
+                ? "/tenant/settlements"
+                : "/owner/settlements";
+
+        String body = String.format(
+            "Dear %s,\n" +
+            "Please confirm the departure for room %s in your portal to complete the move-out process.\n" +
+            "Portal: %s\n\n- Hostel Management",
+            recipient.getDisplayName(), roomNumber,
+            frontendUrl + portalPath
+        );
+
+        trySendSms(recipient.getPhoneNumber(), body, "left-confirmation pending reminder");
+    }
+
+    private void trySendSms(String phone, String body, String context) {
+        try {
+            smsService.sendMessage(phone, body);
+        } catch (Exception e) {
+            log.error("Failed to send {} SMS to {}: {}", context, phone, e.getMessage());
+        }
+    }
+
     public void sendSettlementCompletionNotification(User owner, User tenant, com.krunity.HostelManagment.model.SettlementRequest settlement) {
         if (!emailEnabled || mailSender == null) {
             System.out.println("Email notification disabled. Would send settlement completion notifications");

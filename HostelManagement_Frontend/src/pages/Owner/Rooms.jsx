@@ -11,6 +11,7 @@ import {
   EmptyState,
   PageHeader,
   Skeleton,
+  CenteredModal,
 } from '../../components/ui'
 import { DoorIcon } from '../../components/icons/AppIcons'
 
@@ -162,13 +163,8 @@ const Rooms = () => {
       )}
 
       {showTenantPanel && selectedRoom ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-4 py-6 sm:items-center">
-          <div
-            className="absolute inset-0"
-            onClick={closeTenantPanel}
-            aria-hidden="true"
-          />
-          <Card className="relative z-10 w-full max-w-2xl overflow-hidden">
+      <CenteredModal open onClose={closeTenantPanel}>
+          <Card className="w-full overflow-hidden shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Room tenants</p>
@@ -221,7 +217,7 @@ const Rooms = () => {
               )}
             </div>
           </Card>
-        </div>
+      </CenteredModal>
       ) : null}
     </div>
   )

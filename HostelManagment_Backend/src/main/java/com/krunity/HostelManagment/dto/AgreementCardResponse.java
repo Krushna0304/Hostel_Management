@@ -28,6 +28,7 @@ public class AgreementCardResponse {
     
     // Dates for card display
     private LocalDate startDate;
+    private LocalDate endDate;
     private LocalDateTime createdAt;
     private LocalDateTime activatedAt;
     

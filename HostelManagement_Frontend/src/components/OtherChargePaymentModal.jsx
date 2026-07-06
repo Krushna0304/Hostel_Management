@@ -29,12 +29,15 @@ export default function OtherChargePaymentModal({ charge, installment, onClose, 
     
     // For full charge payment
     if (charge.category === 'OTHER_CHARGE_ROOM' && charge.roomTenants) {
-      // Calculate tenant's share of room charge
+      // Use the tenant's own fixed share when the charge was split into shares.
+      const mine = charge.roomTenants.find((t) => t.currentTenant)
+      if (mine) return mine.splitAmount
+      // Legacy fallback: even split of the current occupancy.
       const tenantShare = charge.amount / charge.roomTenants.length
       const paidShare = (charge.paidAmount || 0) / charge.roomTenants.length
       return tenantShare - paidShare
     }
-    
+
     return charge.remainingAmount || charge.amount
   }
 

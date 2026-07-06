@@ -174,11 +174,11 @@ export default function Profile() {
   // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-8">
-      <PageHeader
+      {/* <PageHeader
         eyebrow="Account"
         title="My Profile"
         description="Update your display name, phone number, or change your password."
-      />
+      /> */}
 
       {fetchError ? (
         <Alert tone="error" title="Could not load profile">
@@ -249,10 +249,10 @@ export default function Profile() {
 
         {/* ── Edit form card ── */}
         <Card>
-          <CardHeader
+          {/* <CardHeader
             title="Edit profile"
             description="Changes are saved immediately. Password update is optional."
-          />
+          /> */}
           <CardContent>
             {loading ? (
               <div className="space-y-4">
@@ -262,14 +262,14 @@ export default function Profile() {
                 <Skeleton className="h-12 rounded-2xl" />
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              <form onSubmit={handleSubmit} className="space-y-2" noValidate>
                 {/* Read-only username */}
                 <InputField
                   label="Username"
                   name="username"
                   value={profile?.username || ''}
                   disabled
-                  hint="Username cannot be changed."
+                  // hint="Username cannot be changed."
                 />
 
                 <InputField

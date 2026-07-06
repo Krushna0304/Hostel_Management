@@ -32,6 +32,8 @@ export const tenantService = {
   recordPayment: (scheduleId, data) => apiClient.post(`/tenant/pay/${scheduleId}`, data),
   getMyAgreement: () => apiClient.get("/tenant/agreement"),
   getTenantAgreements: () => apiClient.get("/tenant/agreements"),
+  markArrival: (allotmentId) => apiClient.post(`/tenant/allotments/${allotmentId}/arrival`),
+  confirmLeft: (allotmentId) => apiClient.post(`/tenant/allotments/${allotmentId}/confirm-left`),
 };
 
 export const ownerReportService = {

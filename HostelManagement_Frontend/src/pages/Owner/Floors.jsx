@@ -11,6 +11,7 @@ import {
   EmptyState,
   PageHeader,
   Skeleton,
+  CenteredModal,
 } from '../../components/ui'
 import { DoorIcon, LayersIcon } from '../../components/icons/AppIcons'
 
@@ -38,6 +39,7 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
   const [roomTenants, setRoomTenants] = useState([])
   const [tenantLoading, setTenantLoading] = useState(false)
   const [tenantError, setTenantError] = useState('')
+  const [activatingId, setActivatingId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -76,6 +78,20 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
     setSelectedRoom(null)
     setRoomTenants([])
     setTenantError('')
+  }
+
+  const handleActivate = async (tenant) => {
+    try {
+      setActivatingId(tenant.allotmentId)
+      await roomService.activateAllotment(hostelId, floorId, selectedRoom.roomId, tenant.allotmentId)
+      // Refresh tenant list in place
+      const response = await roomService.getRoomTenants(hostelId, floorId, selectedRoom.roomId)
+      setRoomTenants(response.data || [])
+    } catch (err) {
+      setTenantError(err?.response?.data?.message || 'Failed to activate allotment.')
+    } finally {
+      setActivatingId(null)
+    }
   }
 
   if (loading) {
@@ -156,11 +172,10 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
         })}
       </div>
 
-      {/* Tenant modal */}
+      {/* Tenant modal — guard selectedRoom so children are not evaluated when closed */}
       {selectedRoom ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-4 py-6 sm:items-center">
-          <div className="absolute inset-0" onClick={closeModal} aria-hidden="true" />
-          <Card className="relative z-10 w-full max-w-2xl overflow-hidden">
+      <CenteredModal open onClose={closeModal}>
+          <Card className="w-full overflow-hidden shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -196,7 +211,11 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
                   {roomTenants.map((tenant) => {
                     const isFlat = tenant.agreementType === 'FLAT'
                     const hasCotenant = isFlat && tenant.coTenantNames && tenant.coTenantNames.length > 0
-                    
+                    const isUpcoming = tenant.roomAllotmentStatus === 'UPCOMING'
+                    const todayStr = new Date().toLocaleDateString('en-CA') // "YYYY-MM-DD" in local time
+                    const startStr = tenant.allotmentDate ? tenant.allotmentDate.slice(0, 10) : null
+                    const canActivate = isUpcoming && tenant.allotmentId && startStr && todayStr >= startStr
+
                     return (
                       <div
                         key={tenant.tenantId || `${tenant.roomId}-${tenant.tenantName}`}
@@ -228,7 +247,18 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
                               )}
                             </div>
                           </div>
-                          <Badge variant="success">{tenant.roomAllotmentStatus || 'ACTIVE'}</Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={isUpcoming ? 'warning' : 'success'}>{tenant.roomAllotmentStatus || 'ACTIVE'}</Badge>
+                            {canActivate && (
+                              <Button
+                                label="Tenant Arrived"
+                                size="sm"
+                                variant="success"
+                                loading={activatingId === tenant.allotmentId}
+                                onClick={() => handleActivate(tenant)}
+                              />
+                            )}
+                          </div>
                         </div>
                         
                         {/* Single line with all key information */}
@@ -243,7 +273,7 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
                           <div className="flex items-center gap-1">
                             <span className="text-xs uppercase tracking-[0.18em] text-slate-400">End:</span>
                             <span className="font-medium text-slate-900">
-                              {isFlat ? (tenant.agreementEndDate ? new Date(tenant.agreementEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Ongoing') : (tenant.agreementEndDate ? new Date(tenant.agreementEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Ongoing')}
+                              {tenant.agreementEndDate ? new Date(tenant.agreementEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                             </span>
                           </div>
                           
@@ -276,7 +306,7 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate }) => 
               )}
             </div>
           </Card>
-        </div>
+      </CenteredModal>
       ) : null}
     </>
   )
@@ -331,9 +361,8 @@ const Floors = () => {
   const selectedFloor = floors.find(floor => floor.floorId === selectedFloorId)
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
-        eyebrow="Inventory structure"
         title={hostelName}
         description={hostelAddress}
         action={
@@ -354,7 +383,7 @@ const Floors = () => {
       {error ? <Alert tone="error">{error}</Alert> : null}
 
       {loading ? (
-        <div className="space-y-6">
+        <div className="space-y-0">
           {/* Floor tabs skeleton */}
           <Card>
             <CardHeader title="Floors" description="Select a floor to view its rooms." />
@@ -392,7 +421,7 @@ const Floors = () => {
           }
         />
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Floors Section - Horizontal Layout */}
           <Card>
             <CardHeader

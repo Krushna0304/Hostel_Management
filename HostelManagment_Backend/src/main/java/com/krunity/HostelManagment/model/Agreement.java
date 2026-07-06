@@ -50,6 +50,7 @@ public class Agreement {
     private List<String> coTenantNames = new ArrayList<>();
     
     private LocalDate startDate;
+    private LocalDate endDate;
     
     private String qrToken;
     private Instant qrExpiry;

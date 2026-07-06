@@ -28,18 +28,24 @@ export default function PlanDetailsModal({ plan, onClose }) {
     const water = Number(plan.charges?.utilityCharges?.water?.monthlyAmount) || 0
     const deepCleaning = Number(plan.charges?.cleaningCharges?.deepCleaningOnExit?.amount) || 0
 
-    // Calculate custom one-time charges
-    const customOneTimeCharges = (plan.charges?.customCharges?.oneTimeCharges || []).reduce((total, charge) => {
-      return total + (Number(charge.amount) || 0)
-    }, 0)
+    // Custom one-time charges (fall back to top-level for backward compatibility), split by refundability
+    const customOneTime = plan.charges?.customCharges?.oneTimeCharges || plan.oneTimeCharges || []
+    const customRefundableOneTime = customOneTime
+      .filter(c => c.refundable)
+      .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+    const customNonRefundableOneTime = customOneTime
+      .filter(c => !c.refundable)
+      .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
 
     // Calculate custom monthly recurring charges
-    const customMonthlyRecurringCharges = (plan.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
+    const customMonthlyRecurringCharges = (plan.charges?.customCharges?.monthlyRecurringCharges || plan.monthlyRecurringCharges || []).reduce((total, charge) => {
       return total + (Number(charge.amount) || 0)
     }, 0)
 
-    // Total calculations
-    const totalOneTimeCharges = oneTimeMaintenance + customOneTimeCharges
+    // Refundable deposits = security deposit + custom refundable one-time charges
+    const refundableDeposits = securityDeposit + customRefundableOneTime
+    // Total one-time charges = maintenance + custom non-refundable charges
+    const totalOneTimeCharges = oneTimeMaintenance + customNonRefundableOneTime
     const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
     const monthlyTotal = baseRent + recurringCharges
 
@@ -49,12 +55,12 @@ export default function PlanDetailsModal({ plan, onClose }) {
     const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
     const installmentAmount = monthlyTotal * monthsPerInstallment
 
-    const activationTotal = installmentAmount + securityDeposit + totalOneTimeCharges
+    const activationTotal = installmentAmount + refundableDeposits + totalOneTimeCharges
 
     return {
       activationAmount: {
         firstInstallment: installmentAmount,
-        refundableDeposits: securityDeposit,
+        refundableDeposits: refundableDeposits,
         oneTimeCharges: totalOneTimeCharges,
         totalActivationAmount: activationTotal
       },
@@ -70,9 +76,9 @@ export default function PlanDetailsModal({ plan, onClose }) {
         totalDuration: totalDuration
       },
       exitSettlement: {
-        estimatedRefund: securityDeposit,
+        estimatedRefund: refundableDeposits,
         potentialDeductions: deepCleaning,
-        netRefundEstimate: securityDeposit - deepCleaning
+        netRefundEstimate: refundableDeposits - deepCleaning
       }
     }
   }
@@ -141,8 +147,9 @@ export default function PlanDetailsModal({ plan, onClose }) {
                     <span className="font-semibold text-slate-900">{formatCurrency(billingBreakdown.activationAmount.oneTimeCharges)}</span>
                   </div>
                   
-                  {/* Show breakdown of one-time charges */}
-                  {(billingBreakdown.activationAmount.oneTimeCharges > 0 || (plan.charges?.customCharges?.oneTimeCharges && plan.charges.customCharges.oneTimeCharges.length > 0)) && (
+                  {/* Breakdown of non-refundable one-time charges */}
+                  {(Number(plan.charges?.maintenanceCharges?.oneTimeMaintenanceCharge?.amount) > 0 ||
+                    (plan.charges?.customCharges?.oneTimeCharges || plan.oneTimeCharges || []).some(c => !c.refundable)) && (
                     <div className="ml-4 space-y-1 text-xs text-slate-500">
                       {Number(plan.charges?.maintenanceCharges?.oneTimeMaintenanceCharge?.amount) > 0 && (
                         <div className="flex justify-between">
@@ -150,7 +157,7 @@ export default function PlanDetailsModal({ plan, onClose }) {
                           <span>{formatCurrency(Number(plan.charges.maintenanceCharges.oneTimeMaintenanceCharge.amount))}</span>
                         </div>
                       )}
-                      {plan.charges?.customCharges?.oneTimeCharges && plan.charges.customCharges.oneTimeCharges.map((charge, index) => (
+                      {(plan.charges?.customCharges?.oneTimeCharges || plan.oneTimeCharges || []).filter(c => !c.refundable).map((charge, index) => (
                         <div key={index} className="flex justify-between">
                           <span>• {charge.chargeName}:</span>
                           <span>{formatCurrency(Number(charge.amount))}</span>
@@ -158,7 +165,25 @@ export default function PlanDetailsModal({ plan, onClose }) {
                       ))}
                     </div>
                   )}
-                  
+
+                  {/* Breakdown of refundable deposits */}
+                  {(plan.charges?.customCharges?.oneTimeCharges || plan.oneTimeCharges || []).some(c => c.refundable) && (
+                    <div className="ml-4 space-y-1 text-xs text-slate-500">
+                      {Number(plan.charges?.securityDeposit?.amount) > 0 && (
+                        <div className="flex justify-between">
+                          <span>• Security Deposit:</span>
+                          <span>{formatCurrency(Number(plan.charges.securityDeposit.amount))}</span>
+                        </div>
+                      )}
+                      {(plan.charges?.customCharges?.oneTimeCharges || plan.oneTimeCharges || []).filter(c => c.refundable).map((charge, index) => (
+                        <div key={index} className="flex justify-between">
+                          <span>• {charge.chargeName}:</span>
+                          <span>{formatCurrency(Number(charge.amount))}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="border-t border-slate-200 pt-2 flex justify-between">
                     <span className="font-semibold text-slate-900">Total Activation:</span>
                     <span className="font-bold text-blue-700">{formatCurrency(billingBreakdown.activationAmount.totalActivationAmount)}</span>
@@ -206,7 +231,7 @@ export default function PlanDetailsModal({ plan, onClose }) {
                           <span>{formatCurrency(Number(plan.charges.utilityCharges.water.monthlyAmount))}</span>
                         </div>
                       )}
-                      {plan.charges?.customCharges?.monthlyRecurringCharges && plan.charges.customCharges.monthlyRecurringCharges.map((charge, index) => (
+                      {(plan.charges?.customCharges?.monthlyRecurringCharges || plan.monthlyRecurringCharges || []).map((charge, index) => (
                         <div key={index} className="flex justify-between">
                           <span>• {charge.chargeName}:</span>
                           <span>{formatCurrency(Number(charge.amount))}</span>
@@ -358,6 +383,38 @@ export default function PlanDetailsModal({ plan, onClose }) {
                 <InfoRow label="Agreement Lock" value={plan.legal.agreementLock ? 'Yes' : 'No'} />
                 <InfoRow label="Modification After Sign" value={plan.legal.modificationAllowedAfterSign ? 'Allowed' : 'Not Allowed'} />
                 <InfoRow label="Jurisdiction" value={plan.legal.jurisdiction} />
+              </div>
+            </Section>
+          )}
+
+          {/* Cancellation Policy */}
+          {plan.agreementCancellationRules?.tenantCancellation && (
+            <Section title="🚪 Cancellation Policy">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <InfoRow 
+                  label="Tenant Cancellation Allowed" 
+                  value={plan.agreementCancellationRules.tenantCancellation.allowed ? 'Yes' : 'No'} 
+                />
+                {plan.agreementCancellationRules.tenantCancellation.allowed && (
+                  <>
+                    <InfoRow 
+                      label="Notice Period" 
+                      value={plan.agreementCancellationRules.tenantCancellation.noticePeriodDays ? `${plan.agreementCancellationRules.tenantCancellation.noticePeriodDays} days` : 'Not specified'} 
+                    />
+                    {plan.agreementCancellationRules.tenantCancellation.earlyExitPenalty?.type ? (
+                      <InfoRow 
+                        label="Early Exit Penalty" 
+                        value={
+                          plan.agreementCancellationRules.tenantCancellation.earlyExitPenalty.type === 'MONTH_RENT' 
+                            ? `${plan.agreementCancellationRules.tenantCancellation.earlyExitPenalty.value} Month(s) Rent` 
+                            : formatCurrency(plan.agreementCancellationRules.tenantCancellation.earlyExitPenalty.value)
+                        } 
+                      />
+                    ) : (
+                      <InfoRow label="Early Exit Penalty" value="No Penalty" />
+                    )}
+                  </>
+                )}
               </div>
             </Section>
           )}

@@ -6,9 +6,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
 import java.util.Map;
 
 @Data
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class CreatePlanRequest {
 
     @NotBlank(message = "Plan name is required")
@@ -29,6 +31,10 @@ public class CreatePlanRequest {
     private Restrictions restrictions;
     private AgreementCancellationRules agreementCancellationRules;
     private Legal legal;
+
+    // Custom charges (for backward compatibility with frontend)
+    private List<EnhancedCharge> oneTimeCharges;
+    private List<EnhancedCharge> monthlyRecurringCharges;
 
     // Owner can add any custom key-value fields
     private Map<String, Object> customFields;

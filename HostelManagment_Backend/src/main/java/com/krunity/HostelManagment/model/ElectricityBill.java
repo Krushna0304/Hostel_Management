@@ -32,10 +32,7 @@ public class ElectricityBill {
     
     @Column(name = "owner_id", nullable = false)
     private UUID ownerId;
-    
-    @Column(name = "tenant_id")
-    private UUID tenantId;
-    
+
     @Column(name = "bill_month", nullable = false)
     private Integer billMonth; // 1-12
     
@@ -83,18 +80,15 @@ public class ElectricityBill {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", insertable = false, updatable = false)
     private User owner;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", insertable = false, updatable = false)
-    private User tenant;
-    
+
     // Helper method to update remaining amount
     public void updateRemainingAmount() {
         this.remainingAmount = this.totalAmount.subtract(this.paidAmount);
-        
-        // Update status based on payment
-        if (this.remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
-            this.status = BillStatus.PAID;
+
+        // Update status based on payment. The bill is split across multiple tenant
+        // shares; once every share is paid (remaining == 0) the bill is COMPLETED.
+        if (this.remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            this.status = BillStatus.COMPLETED;
         } else if (this.paidAmount.compareTo(BigDecimal.ZERO) > 0) {
             this.status = BillStatus.PARTIAL;
         } else {

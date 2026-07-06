@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import Swal from 'sweetalert2'
 import { ownerReportService } from '../../services/agreementService'
 import { otherChargeService } from '../../services/otherChargeService'
+import electricityBillService from '../../services/electricityBillService'
 import {
   Alert,
   Badge,
@@ -17,6 +19,7 @@ import QuickPaymentConfirmation from '../../components/QuickPaymentConfirmation'
 import PaymentHistoryModal from '../../components/PaymentHistoryModal'
 import OtherChargeDetailsModal from '../../components/OtherChargeDetailsModal'
 import OwnerOtherChargePaymentModal from '../../components/OwnerOtherChargePaymentModal'
+import ElectricityCollectionHistoryModal from '../../components/ElectricityCollectionHistoryModal'
 
 export default function CollectionDashboard() {
   const [data, setData] = useState(null)
@@ -39,6 +42,14 @@ export default function CollectionDashboard() {
   const [showChargePayment, setShowChargePayment] = useState(false)
   const [selectedCharge, setSelectedCharge] = useState(null)
 
+  // Electricity collection states
+  const [electricityRows, setElectricityRows] = useState([])
+  const [electricityLoading, setElectricityLoading] = useState(false)
+  const [electricityLoaded, setElectricityLoaded] = useState(false)
+  const [collectingTenantId, setCollectingTenantId] = useState(null)
+  const [showElectricityHistory, setShowElectricityHistory] = useState(false)
+  const [electricityHistoryTenant, setElectricityHistoryTenant] = useState(null)
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -47,6 +58,9 @@ export default function CollectionDashboard() {
   useEffect(() => {
     if (activeTab === 'other-charges' && !otherChargesLoaded) {
       fetchOtherCharges()
+    }
+    if (activeTab === 'electricity' && !electricityLoaded) {
+      fetchElectricity()
     }
   }, [activeTab])
 
@@ -73,6 +87,61 @@ export default function CollectionDashboard() {
       console.error('Failed to load other charges:', err)
     } finally {
       setOtherChargesLoading(false)
+    }
+  }
+
+  const fetchElectricity = async () => {
+    try {
+      setElectricityLoading(true)
+      const rows = await electricityBillService.getOwnerCollections()
+      setElectricityRows(rows)
+      setElectricityLoaded(true)
+    } catch (err) {
+      console.error('Failed to load electricity collections:', err)
+    } finally {
+      setElectricityLoading(false)
+    }
+  }
+
+  const handleCollectElectricity = async (row) => {
+    if (!row.outstandingAmount || Number(row.outstandingAmount) <= 0) return
+
+    const result = await Swal.fire({
+      title: 'Collect Electricity Dues',
+      html: `
+        <div style="text-align:left;font-size:15px;">
+          <p style="margin-bottom:8px;">Mark <strong>${row.tenantName}</strong>'s electricity dues as collected (cash).</p>
+          <p style="margin-bottom:8px;">Pending bills: <strong>${row.pendingBills}</strong></p>
+          <p>Amount: <strong>${fmt(row.outstandingAmount)}</strong></p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Collect',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#0f172a',
+      cancelButtonColor: '#94a3b8',
+    })
+    if (!result.isConfirmed) return
+
+    try {
+      setCollectingTenantId(row.tenantId)
+      setError('')
+      const res = await electricityBillService.collectTenantElectricity(row.tenantId)
+      await Swal.fire({
+        title: 'Collected! ⚡',
+        html: `<p>Collected ${res?.collected ?? row.pendingBills} bill(s) from ${row.tenantName}.</p>`,
+        icon: 'success',
+        confirmButtonColor: '#0f172a',
+        timer: 2500,
+        timerProgressBar: true,
+      })
+      setElectricityLoaded(false)
+      fetchElectricity()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to collect electricity dues.')
+    } finally {
+      setCollectingTenantId(null)
     }
   }
 
@@ -209,6 +278,16 @@ export default function CollectionDashboard() {
     )
   })
 
+  // Filter electricity collection rows based on search query
+  const filteredElectricity = electricityRows.filter((row) => {
+    const query = searchQuery.toLowerCase()
+    return (
+      row.tenantName?.toLowerCase().includes(query) ||
+      row.hostelName?.toLowerCase().includes(query) ||
+      row.roomNumber?.toLowerCase().includes(query)
+    )
+  })
+
   if (loading) {
     return (
       <div className="space-y-8">
@@ -276,6 +355,18 @@ export default function CollectionDashboard() {
         />
       )}
 
+      {/* Electricity Collection History Modal */}
+      {showElectricityHistory && electricityHistoryTenant && (
+        <ElectricityCollectionHistoryModal
+          tenantName={electricityHistoryTenant.tenantName}
+          tenantId={electricityHistoryTenant.tenantId}
+          onClose={() => {
+            setShowElectricityHistory(false)
+            setElectricityHistoryTenant(null)
+          }}
+        />
+      )}
+
       <PageHeader
         eyebrow="Collections"
         title="Rent collection dashboard"
@@ -284,6 +375,9 @@ export default function CollectionDashboard() {
           if (activeTab === 'other-charges') {
             setOtherChargesLoaded(false)
             fetchOtherCharges()
+          } else if (activeTab === 'electricity') {
+            setElectricityLoaded(false)
+            fetchElectricity()
           } else {
             fetchData()
           }
@@ -320,13 +414,27 @@ export default function CollectionDashboard() {
         >
           Other Charges {otherChargesLoading ? '(...)' : activeTab === 'other-charges' || otherCharges.length > 0 ? `(${filteredOtherCharges.length})` : ''}
         </button>
+        <button
+          onClick={() => setActiveTab('electricity')}
+          className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            activeTab === 'electricity'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Electricity Bills {electricityLoading ? '(...)' : activeTab === 'electricity' || electricityRows.length > 0 ? `(${filteredElectricity.length})` : ''}
+        </button>
       </div>
 
       <Card>
         <CardHeader
-          title={activeTab === 'installments' ? "Tenant collection status" : "Other Charges Collection"}
-          description={activeTab === 'installments' ? 
+          title={activeTab === 'installments' ? "Tenant collection status"
+            : activeTab === 'electricity' ? "Electricity bills collection"
+            : "Other Charges Collection"}
+          description={activeTab === 'installments' ?
             "Per-tenant breakdown of rent collection, pending installments, and overdue amounts." :
+            activeTab === 'electricity' ?
+            "Per-tenant electricity dues, outstanding and overdue amounts." :
             "Additional charges applied to tenants and rooms with payment status."
           }
         />
@@ -336,8 +444,10 @@ export default function CollectionDashboard() {
             <div className="relative">
               <input
                 type="text"
-                placeholder={activeTab === 'installments' ? 
+                placeholder={activeTab === 'installments' ?
                   "Search by tenant name, hostel, room, or ID..." :
+                  activeTab === 'electricity' ?
+                  "Search by tenant name, hostel, or room..." :
                   "Search by charge name, tenant, room..."
                 }
                 value={searchQuery}
@@ -370,8 +480,10 @@ export default function CollectionDashboard() {
             </div>
             {searchQuery && (
               <p className="mt-2 text-xs text-slate-500">
-                {activeTab === 'installments' ? 
+                {activeTab === 'installments' ?
                   `Found ${filteredTenants.length} of ${data?.tenants?.length || 0} tenants` :
+                  activeTab === 'electricity' ?
+                  `Found ${filteredElectricity.length} of ${electricityRows.length} tenants` :
                   `Found ${filteredOtherCharges.length} of ${otherCharges.length} charges`
                 }
               </p>
@@ -397,7 +509,7 @@ export default function CollectionDashboard() {
                   <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
                     <th className="pb-3 pr-4">Tenant</th>
                     <th className="pb-3 pr-4">Hostel / Room</th>
-                    <th className="pb-3 pr-4">Monthly rent</th>
+                    <th className="pb-3 pr-4">Installment Amount</th>
                     <th className="pb-3 pr-4">Pending installments</th>
                     <th className="pb-3 pr-4">Overdue</th>
                     <th className="pb-3 pr-4">Overdue amount</th>
@@ -408,7 +520,6 @@ export default function CollectionDashboard() {
                     <tr key={t.tenantId}>
                       <td className="py-3 pr-4">
                         <p className="font-semibold text-slate-950">{t.tenantName}</p>
-                        <p className="text-xs text-slate-400">{t.tenantId.slice(0, 8)}…</p>
                       </td>
                       <td className="py-3 pr-4 text-slate-600">
                         {t.hostelName} · Room {t.roomNumber}
@@ -454,6 +565,89 @@ export default function CollectionDashboard() {
                 </tbody>
               </table>
             </div>
+            )
+          ) : activeTab === 'electricity' ? (
+            // Electricity Bills collection table
+            electricityLoading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 rounded-lg" />
+                ))}
+              </div>
+            ) : !electricityRows.length ? (
+              <EmptyState
+                title="No electricity bills"
+                description="Electricity dues will appear here once bills are created for your rooms."
+              />
+            ) : filteredElectricity.length === 0 ? (
+              <EmptyState
+                title="No matching tenants"
+                description="Try adjusting your search query to find what you're looking for."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
+                      <th className="pb-3 pr-4">Tenant</th>
+                      <th className="pb-3 pr-4">Hostel / Room</th>
+                      <th className="pb-3 pr-4">Pending bills</th>
+                      <th className="pb-3 pr-4">Outstanding</th>
+                      <th className="pb-3 pr-4">Overdue amount</th>
+                      <th className="pb-3 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredElectricity.map((row) => (
+                      <tr key={row.tenantId}>
+                        <td className="py-3 pr-4">
+                          <p className="font-semibold text-slate-950">{row.tenantName}</p>
+                        </td>
+                        <td className="py-3 pr-4 text-slate-600">
+                          {row.hostelName} · Room {row.roomNumber}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {row.pendingBills > 0 ? (
+                            <Badge variant="warning">{row.pendingBills} pending</Badge>
+                          ) : (
+                            <Badge variant="success">All paid</Badge>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 font-semibold text-slate-950">
+                          {Number(row.outstandingAmount) > 0 ? fmt(row.outstandingAmount) : '—'}
+                        </td>
+                        <td className="py-3 pr-4 font-semibold text-red-600">
+                          {Number(row.overdueAmount) > 0 ? fmt(row.overdueAmount) : '—'}
+                        </td>
+                        <td className="py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              label="History"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setElectricityHistoryTenant(row)
+                                setShowElectricityHistory(true)
+                              }}
+                            />
+                            {Number(row.outstandingAmount) > 0 ? (
+                              <Button
+                                label={collectingTenantId === row.tenantId ? 'Collecting...' : 'Collect'}
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleCollectElectricity(row)}
+                                disabled={collectingTenantId === row.tenantId}
+                              />
+                            ) : (
+                              <span className="text-sm text-slate-500">No pending</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )
           ) : (
             // Other Charges Section

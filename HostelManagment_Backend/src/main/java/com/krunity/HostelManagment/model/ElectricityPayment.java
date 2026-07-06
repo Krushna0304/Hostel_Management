@@ -30,18 +30,25 @@ public class ElectricityPayment {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
     
+    // The tenant's share of the bill (set when the bill is created and split).
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
-    
+
+    // Null until the tenant actually pays this share.
     @Enumerated(EnumType.STRING)
-    @Column(name = "payment_mode", nullable = false)
+    @Column(name = "payment_mode")
     private TransactionMode paymentMode;
-    
+
+    // A share starts PENDING and becomes COMPLETED once the tenant pays it.
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     @Builder.Default
-    private PaymentStatus status = PaymentStatus.COMPLETED;
-    
+    private PaymentStatus status = PaymentStatus.PENDING;
+
+    // Timestamp when this share was paid.
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
+
     @Column(name = "payment_reference")
     private String paymentReference;
     

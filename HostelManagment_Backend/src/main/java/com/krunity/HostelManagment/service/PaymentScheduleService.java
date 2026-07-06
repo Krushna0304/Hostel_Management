@@ -73,7 +73,9 @@ public class PaymentScheduleService {
 
         // Calculate months per installment based on plan configuration
         int monthsPerInstallment = 1; // Default to monthly
-        if (planSnapshot != null && planSnapshot.getDuration() != null && planSnapshot.getPaymentModel() != null) {
+        boolean isNotFixed = AgreementService.isNotFixedDuration(planSnapshot);
+        if (!isNotFixed && planSnapshot != null && planSnapshot.getDuration() != null && planSnapshot.getPaymentModel() != null
+                && planSnapshot.getDuration().getValue() != null) {
             int totalDurationMonths = planSnapshot.getDuration().getValue();
             int numberOfInstallments = planSnapshot.getPaymentModel().getInstallments();
             if (numberOfInstallments > 0) {

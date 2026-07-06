@@ -233,7 +233,7 @@ const AddRoom = () => {
               {/* Room Type - Show when hostel is selected */}
               {formData.hostelId && (
                 <FormSelect
-                  label="Room Type"
+                  label="Room Types"
                   name="roomType"
                   value={formData.roomType}
                   onChange={handleChange}

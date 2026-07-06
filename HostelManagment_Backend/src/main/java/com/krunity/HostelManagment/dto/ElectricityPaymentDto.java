@@ -16,6 +16,8 @@ public class ElectricityPaymentDto {
     private UUID billId;
     private UUID tenantId;
     private String tenantName;
+    private String billPeriod; // "July 2026" — populated for owner collection history
+    private String roomNumber;
     private BigDecimal amount;
     private TransactionMode paymentMode;
     private PaymentStatus status;
@@ -24,4 +26,5 @@ public class ElectricityPaymentDto {
     private String razorpayPaymentId;
     private String notes;
     private LocalDateTime createdAt;
+    private LocalDateTime paidAt;
 }

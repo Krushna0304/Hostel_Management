@@ -38,7 +38,13 @@ const INITIAL_FORM = {
     houseRules: { smokingAllowed: false, petsAllowed: false, quietHours: { from: '22:00', to: '06:00' } },
     facilityUsageRules: [],
   },
-  legal: { agreementLock: true, modificationAllowedAfterSign: false, jurisdiction: '' },
+  agreementCancellationRules: {
+    tenantCancellation: {
+      allowed: false,
+      noticePeriodDays: '',
+      earlyExitPenalty: { type: '', value: '' }
+    }
+  },
   customFields: {},
 }
 
@@ -238,8 +244,27 @@ export default function CreatePlanModal({ onClose, onCreated, editMode = false, 
             monthlyRecurringCharges: form.monthlyRecurringCharges || []
           }
         },
+        // Send custom charges at root level for backward compatibility
+        oneTimeCharges: form.oneTimeCharges || [],
+        monthlyRecurringCharges: form.monthlyRecurringCharges || [],
         // Include custom fields
         customFields: form.customFields || {},
+        agreementCancellationRules: {
+          tenantCancellation: {
+            allowed: Boolean(form.agreementCancellationRules?.tenantCancellation?.allowed),
+            noticePeriodDays: form.agreementCancellationRules?.tenantCancellation?.allowed && form.agreementCancellationRules?.tenantCancellation?.noticePeriodDays
+              ? Number(form.agreementCancellationRules.tenantCancellation.noticePeriodDays)
+              : null,
+            earlyExitPenalty: form.agreementCancellationRules?.tenantCancellation?.allowed && form.agreementCancellationRules?.tenantCancellation?.earlyExitPenalty?.type
+              ? {
+                  type: form.agreementCancellationRules.tenantCancellation.earlyExitPenalty.type,
+                  value: form.agreementCancellationRules.tenantCancellation.earlyExitPenalty.value
+                    ? Number(form.agreementCancellationRules.tenantCancellation.earlyExitPenalty.value)
+                    : 0
+                }
+              : null
+          }
+        },
         latePaymentPolicy: {
           ...form.latePaymentPolicy,
           penalty: {
@@ -341,27 +366,11 @@ export default function CreatePlanModal({ onClose, onCreated, editMode = false, 
 
           {/* Enhanced Billing Sections */}
           <RentSection form={form} set={set} />
+          <RecurringChargesSection form={form} set={set} />
           <OneTimeChargesSection form={form} set={set} />
           <OtherChargesSection form={form} set={set} />
-          <RecurringChargesSection form={form} set={set} />
           <InstallmentModelSection form={form} set={set} />
           <BillingPreviewSection form={form} />
-
-          {/* ── Facilities ── */}
-          <Section title="✨ Free Facilities">
-            <div className="flex gap-2">
-              <input className={inputCls} value={newFacility} onChange={e => setNewFacility(e.target.value)} placeholder="e.g. Wi-Fi" onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addFacility())} />
-              <button type="button" onClick={addFacility} className="px-4 py-2 bg-slate-950 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition">Add</button>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {form.freeFacilities.facilities.map((f, i) => (
-                <span key={i} className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-                  {f.name}
-                  <button type="button" onClick={() => removeFacility(i)} className="text-green-600 hover:text-red-600 ml-1">✕</button>
-                </span>
-              ))}
-            </div>
-          </Section>
 
           {/* ── Late Payment Policy ── */}
           <Section title="⚠️ Late Payment Policy">
@@ -380,6 +389,86 @@ export default function CreatePlanModal({ onClose, onCreated, editMode = false, 
               <Field label="Max Penalty (₹)">
                 <NumericInput className={inputCls} value={form.latePaymentPolicy.penalty.maxAmount} onChange={e => set('latePaymentPolicy.penalty.maxAmount', e.target.value)} min="0" />
               </Field>
+            </div>
+          </Section>
+
+          {/* ── Cancellation Policy ── */}
+          <Section title="🚪 Cancellation Policy">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Tenant Cancellation Allowed">
+                <select 
+                  className={selectCls} 
+                  value={form.agreementCancellationRules?.tenantCancellation?.allowed ?? false} 
+                  onChange={e => set('agreementCancellationRules.tenantCancellation.allowed', e.target.value === 'true')}
+                >
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </Field>
+
+              {(form.agreementCancellationRules?.tenantCancellation?.allowed) ? (
+                <>
+                  <Field label="Notice Period (days)">
+                    <NumericInput 
+                      className={inputCls} 
+                      value={form.agreementCancellationRules?.tenantCancellation?.noticePeriodDays ?? ''} 
+                      onChange={e => set('agreementCancellationRules.tenantCancellation.noticePeriodDays', e.target.value)} 
+                      min="0" 
+                      placeholder="e.g. 30"
+                    />
+                  </Field>
+
+                  <Field label="Early Exit Penalty Type">
+                    <select 
+                      className={selectCls} 
+                      value={form.agreementCancellationRules?.tenantCancellation?.earlyExitPenalty?.type ?? ''} 
+                      onChange={e => set('agreementCancellationRules.tenantCancellation.earlyExitPenalty.type', e.target.value)}
+                    >
+                      <option value="">No Penalty</option>
+                      <option value="MONTH_RENT">Months of Rent</option>
+                      <option value="FIXED">Fixed Amount (₹)</option>
+                    </select>
+                  </Field>
+
+                  {form.agreementCancellationRules?.tenantCancellation?.earlyExitPenalty?.type && (
+                    <Field 
+                      label={
+                        form.agreementCancellationRules.tenantCancellation.earlyExitPenalty.type === 'MONTH_RENT' 
+                          ? 'Number of Months' 
+                          : 'Penalty Amount (₹)'
+                      }
+                    >
+                      <NumericInput 
+                        className={inputCls} 
+                        value={form.agreementCancellationRules?.tenantCancellation?.earlyExitPenalty?.value ?? ''} 
+                        onChange={e => set('agreementCancellationRules.tenantCancellation.earlyExitPenalty.value', e.target.value)} 
+                        min="0" 
+                        placeholder={
+                          form.agreementCancellationRules.tenantCancellation.earlyExitPenalty.type === 'MONTH_RENT' 
+                            ? 'e.g. 1' 
+                            : 'e.g. 5000'
+                        }
+                      />
+                    </Field>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </Section>
+
+          {/* ── Facilities ── */}
+          <Section title="✨ Free Facilities">
+            <div className="flex gap-2">
+              <input className={inputCls} value={newFacility} onChange={e => setNewFacility(e.target.value)} placeholder="e.g. Wi-Fi" onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addFacility())} />
+              <button type="button" onClick={addFacility} className="px-4 py-2 bg-slate-950 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition">Add</button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {form.freeFacilities.facilities.map((f, i) => (
+                <span key={i} className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                  {f.name}
+                  <button type="button" onClick={() => removeFacility(i)} className="text-green-600 hover:text-red-600 ml-1">✕</button>
+                </span>
+              ))}
             </div>
           </Section>
 
@@ -417,25 +506,6 @@ export default function CreatePlanModal({ onClose, onCreated, editMode = false, 
                 ))}
               </ul>
             </Field>
-          </Section>
-
-          {/* ── Legal ── */}
-          <Section title="⚖️ Legal">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Agreement Lock">
-                <select className={selectCls} value={form.legal.agreementLock} onChange={e => set('legal.agreementLock', e.target.value === 'true')}>
-                  <option value="true">Yes</option><option value="false">No</option>
-                </select>
-              </Field>
-              <Field label="Modification After Sign">
-                <select className={selectCls} value={form.legal.modificationAllowedAfterSign} onChange={e => set('legal.modificationAllowedAfterSign', e.target.value === 'true')}>
-                  <option value="false">Not Allowed</option><option value="true">Allowed</option>
-                </select>
-              </Field>
-              <Field label="Jurisdiction">
-                <input className={inputCls} value={form.legal.jurisdiction} onChange={e => set('legal.jurisdiction', e.target.value)} placeholder="e.g. Nagpur, Maharashtra" />
-              </Field>
-            </div>
           </Section>
 
           {/* ── Custom Fields ── */}

@@ -36,14 +36,14 @@ export default function ElectricityBills() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      {/* <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-950">Electricity Bill Management</h1>
           <p className="text-slate-600 mt-1">Manage electricity accounts, create bills, and track payments</p>
         </div>
-      </div>
+      </div> */}
 
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">
@@ -52,7 +52,7 @@ export default function ElectricityBills() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              className={`flex items-center gap-2 py-2.5 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab.id
                   ? 'border-slate-950 text-slate-950'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -66,7 +66,7 @@ export default function ElectricityBills() {
       </div>
 
       {/* Tab Content */}
-      <div className="min-h-[600px]">
+      <div className="min-h-[400px]">
         {renderContent()}
       </div>
     </div>

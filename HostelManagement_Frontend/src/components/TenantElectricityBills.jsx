@@ -3,6 +3,7 @@ import { Alert, Card, EmptyState, LoadingScreen, Button } from './ui'
 import electricityBillService from '../services/electricityBillService'
 import ElectricityPaymentModal from './ElectricityPaymentModal'
 import ElectricityPaymentHistory from './ElectricityPaymentHistory'
+import ElectricityPayAllModal from './ElectricityPayAllModal'
 
 export default function TenantElectricityBills() {
   const [bills, setBills] = useState([])
@@ -11,6 +12,7 @@ export default function TenantElectricityBills() {
   const [selectedBill, setSelectedBill] = useState(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showPaymentHistory, setShowPaymentHistory] = useState(false)
+  const [showPayAll, setShowPayAll] = useState(false)
 
   useEffect(() => {
     loadBills()
@@ -54,32 +56,28 @@ export default function TenantElectricityBills() {
     loadBills() // Refresh bills after payment
   }
 
-  const groupBillsByPeriod = () => {
-    const grouped = {}
-    bills.forEach(bill => {
-      const key = `${bill.billYear}-${bill.billMonth.toString().padStart(2, '0')}`
-      if (!grouped[key]) {
-        grouped[key] = {
-          period: bill.billPeriod,
-          bills: []
-        }
-      }
-      grouped[key].bills.push(bill)
-    })
-    
-    // Sort by period (newest first)
-    return Object.entries(grouped)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([key, data]) => data)
+  const getOutstandingBills = () => bills.filter(bill => Number(bill.remainingAmount) > 0)
+
+  const handlePayAllSuccess = () => {
+    setShowPayAll(false)
+    loadBills()
   }
 
   const getTotalStats = () => {
     const totalAmount = bills.reduce((sum, bill) => sum + Number(bill.totalAmount), 0)
     const paidAmount = bills.reduce((sum, bill) => sum + Number(bill.paidAmount), 0)
     const remainingAmount = bills.reduce((sum, bill) => sum + Number(bill.remainingAmount), 0)
-    
+
     return { totalAmount, paidAmount, remainingAmount }
   }
+
+  // Sort bills newest first by period
+  const getSortedBills = () =>
+    [...bills].sort((a, b) => {
+      const keyA = `${a.billYear}-${a.billMonth.toString().padStart(2, '0')}`
+      const keyB = `${b.billYear}-${b.billMonth.toString().padStart(2, '0')}`
+      return keyB.localeCompare(keyA)
+    })
 
   if (loading) {
     return <LoadingScreen />
@@ -95,15 +93,24 @@ export default function TenantElectricityBills() {
     )
   }
 
-  const groupedBills = groupBillsByPeriod()
   const stats = getTotalStats()
+  const sortedBills = getSortedBills()
+  const outstandingCount = getOutstandingBills().length
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-950">My Electricity Bills</h1>
-        <p className="text-sm text-slate-600 mt-1">View and pay your electricity bills</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-950">My Electricity Bills</h1>
+          <p className="text-sm text-slate-600 mt-1">View and pay your electricity bills</p>
+        </div>
+        {outstandingCount > 0 && (
+          <Button
+            label={`Pay All (${electricityBillService.formatCurrency(stats.remainingAmount)})`}
+            onClick={() => setShowPayAll(true)}
+          />
+        )}
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}
@@ -138,72 +145,63 @@ export default function TenantElectricityBills() {
         </Card>
       </div>
 
-      {/* Bills by Period */}
-      {groupedBills.map((group, groupIndex) => (
-        <div key={groupIndex} className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-950">{group.period}</h2>
-            <div className="text-sm text-slate-600">
-              {group.bills.length} bills
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {group.bills.map(bill => (
-              <Card key={bill.billId} className="hover:shadow-lg transition-shadow">
-                <div className="p-3">
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="min-w-0 flex-1 mr-2">
-                      <h3 className="text-sm font-semibold text-slate-950 truncate">Room {bill.roomNumber}</h3>
-                      <p className="text-xs text-slate-500 truncate">Acc: {bill.accountNumber}</p>
-                    </div>
-                    <div className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap ${
+      {/* Bills Table */}
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
+                <th className="px-4 py-3 font-medium">Period</th>
+                <th className="px-4 py-3 font-medium">Room</th>
+                <th className="px-4 py-3 font-medium">Account</th>
+                <th className="px-4 py-3 font-medium text-right">Amount</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Due Date</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedBills.map(bill => (
+                <tr key={bill.billId} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-900">{bill.billPeriod}</td>
+                  <td className="px-4 py-3 text-slate-700">Room {bill.roomNumber}</td>
+                  <td className="px-4 py-3 text-slate-500">{bill.accountNumber}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                    {electricityBillService.formatCurrency(bill.totalAmount)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${
                       electricityBillService.getBillStatusColor(bill.status)
                     }`}>
                       {electricityBillService.getBillStatusIcon(bill.status)} {bill.status}
-                    </div>
-                  </div>
-
-                  {/* Amount */}
-                  <div className="flex items-baseline justify-between text-xs mb-2">
-                    <span className="text-slate-500">Amount:</span>
-                    <span className="font-semibold text-slate-900">
-                      {electricityBillService.formatCurrency(bill.totalAmount)}
                     </span>
-                  </div>
-
-                  {/* Due Date */}
-                  {bill.dueDate && (
-                    <div className="mb-2 text-[10px] text-amber-700">
-                      Due: {new Date(bill.dueDate).toLocaleDateString()}
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                    {Number(bill.remainingAmount) > 0 && (
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {bill.dueDate ? new Date(bill.dueDate).toLocaleDateString() : '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-2">
+                      {Number(bill.remainingAmount) > 0 && (
+                        <Button
+                          label={`Pay ${electricityBillService.formatCurrency(bill.remainingAmount)}`}
+                          onClick={() => handlePayBill(bill)}
+                          size="sm"
+                        />
+                      )}
                       <Button
-                        label={`Pay ${electricityBillService.formatCurrency(bill.remainingAmount)}`}
-                        onClick={() => handlePayBill(bill)}
-                        fullWidth
+                        label="View History"
+                        onClick={() => handleViewHistory(bill)}
+                        variant="secondary"
                         size="sm"
                       />
-                    )}
-                    <Button
-                      label="View History"
-                      onClick={() => handleViewHistory(bill)}
-                      variant="secondary"
-                      fullWidth
-                      size="sm"
-                    />
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ))}
+      </Card>
 
       {/* Payment Modal */}
       {showPaymentModal && selectedBill && (
@@ -225,6 +223,15 @@ export default function TenantElectricityBills() {
             setShowPaymentHistory(false)
             setSelectedBill(null)
           }}
+        />
+      )}
+
+      {/* Pay All Modal */}
+      {showPayAll && (
+        <ElectricityPayAllModal
+          bills={bills}
+          onSuccess={handlePayAllSuccess}
+          onClose={() => setShowPayAll(false)}
         />
       )}
     </div>

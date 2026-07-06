@@ -32,15 +32,18 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final RoomAllotmentRepository roomAllotmentRepository;
+    private final CashPaymentOtpService cashPaymentOtpService;
 
     public UserService(UserRepository userRepository, RoleRepository roleRepository,
                        JwtUtils jwtUtils, PasswordEncoder passwordEncoder,
-                       RoomAllotmentRepository roomAllotmentRepository) {
+                       RoomAllotmentRepository roomAllotmentRepository,
+                       CashPaymentOtpService cashPaymentOtpService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.jwtUtils = jwtUtils;
         this.passwordEncoder = passwordEncoder;
         this.roomAllotmentRepository = roomAllotmentRepository;
+        this.cashPaymentOtpService = cashPaymentOtpService;
     }
 
     public void createUser(CreateUserRequest createUserRequest) {
@@ -58,6 +61,11 @@ public class UserService {
         String hashedPassword = passwordEncoder.encode(createUserRequest.getPassword());
         User user = UserMapper.toEntity(createUserRequest, role, hashedPassword);
         userRepository.save(user);
+
+        // Seed cash-payment-method toggles for new owners (default disabled).
+        if ("OWNER".equalsIgnoreCase(role.getName())) {
+            cashPaymentOtpService.seedDefaultsForOwner(user.getUserId());
+        }
     }
 
     public UserResponse getUser(String username) {
@@ -139,7 +147,7 @@ public class UserService {
         
         // Get all confirmed room allotments for this owner
         List<RoomAllotment> allotments = roomAllotmentRepository
-                .findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatus(ownerId, RoomAllotmentStatus.CONFIRMED);
+                .findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatus(ownerId, RoomAllotmentStatus.ACTIVE);
         
         // Filter by hostel and get unique tenants
         List<User> tenants = allotments.stream()

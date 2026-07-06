@@ -44,7 +44,13 @@ public class SettlementResponseDto {
     
     // Payment information
     private String paymentReference;
-    
+
+    // Allotment status (for UI-driven left confirmation)
+    private UUID allotmentId;
+    private String allotmentStatus;
+    private boolean tenantMarkedLeft;
+    private boolean ownerMarkedLeft;
+
     // Timestamps
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

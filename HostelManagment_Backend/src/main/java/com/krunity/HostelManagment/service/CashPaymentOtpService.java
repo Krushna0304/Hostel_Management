@@ -1,13 +1,12 @@
 package com.krunity.HostelManagment.service;
 
+import com.krunity.HostelManagment.dto.CashPaymentAllowDto;
+import com.krunity.HostelManagment.enums.CashPaymentMethod;
+import com.krunity.HostelManagment.exception.ConflictException;
 import com.krunity.HostelManagment.exception.NotFoundException;
-import com.krunity.HostelManagment.model.Agreement;
-import com.krunity.HostelManagment.model.CashPaymentOtp;
-import com.krunity.HostelManagment.model.Room;
-import com.krunity.HostelManagment.model.User;
-import com.krunity.HostelManagment.repository.AgreementRepository;
-import com.krunity.HostelManagment.repository.CashPaymentOtpRepository;
-import com.krunity.HostelManagment.repository.RoomRepository;
+import com.krunity.HostelManagment.model.*;
+import com.krunity.HostelManagment.repository.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,532 +16,261 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
+/**
+ * Cash-payment OTP engine.
+ *
+ * <p>An OTP ({@link CashPaymentOtp}) is decoupled from payment type. Each request it
+ * authorises is recorded as a {@link PaymentOtp} row pointing at the owner+method
+ * config ({@link CashPaymentAllow}). This makes the system extensible (new method =
+ * new enum value, no schema change) and lets one OTP cover many requests (pay all).</p>
+ */
+@Slf4j
 @Service
 public class CashPaymentOtpService {
-    
-    @Autowired
-    private CashPaymentOtpRepository otpRepository;
-    
-    @Autowired
-    private AgreementRepository agreementRepository;
-    
-    @Autowired
-    private RoomRepository roomRepository;
-    
-    @Autowired
-    private com.krunity.HostelManagment.repository.PaymentRequestScheduleRepository scheduleRepository;
-    
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-    
-    @Autowired
-    private NotificationService notificationService;
-    
-    @Autowired
-    private com.krunity.HostelManagment.repository.ElectricityBillRepository electricityBillRepository;
-    
+
+    @Autowired private CashPaymentOtpRepository otpRepository;
+    @Autowired private CashPaymentAllowRepository allowRepository;
+    @Autowired private PaymentOtpRepository paymentOtpRepository;
+
+    @Autowired private AgreementRepository agreementRepository;
+    @Autowired private RoomRepository roomRepository;
+    @Autowired private PaymentRequestScheduleRepository scheduleRepository;
+    @Autowired private ElectricityBillRepository electricityBillRepository;
+    @Autowired private OtherChargeRepository otherChargeRepository;
+    @Autowired private SettlementRequestRepository settlementRequestRepository;
+
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private NotificationService notificationService;
+
     private static final int OTP_EXPIRY_MINUTES = 10;
-    
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    // ── Owner cash-payment settings ────────────────────────────────────────────
+
+    /** Seeds one config row per method for a new owner (configurable ones disabled). */
     @Transactional
-    public String generateAndSendOtp(String agreementId) {
-        // Get agreement
-        Agreement agreement = agreementRepository.findById(agreementId)
-                .orElseThrow(() -> new NotFoundException("Agreement not found"));
-        
-        // Get owner from room
-        Room room = roomRepository.findById(agreement.getRoomId())
-                .orElseThrow(() -> new NotFoundException("Room not found"));
-        
-        User owner = room.getHostel().getOwner();
-        
-        // Generate 6-digit OTP
-        String otp = generateOtp();
-        
-        // Hash the OTP before storing
-        String otpHash = passwordEncoder.encode(otp);
-        
-        // Save OTP with expiry
-        CashPaymentOtp cashPaymentOtp = CashPaymentOtp.builder()
-                .agreementId(agreementId)
-                .ownerPhone(owner.getPhoneNumber())
-                .otpHash(otpHash)
-                .expiryTime(Instant.now().plus(OTP_EXPIRY_MINUTES, ChronoUnit.MINUTES))
-                .used(false)
+    public void seedDefaultsForOwner(UUID ownerId) {
+        for (CashPaymentMethod method : CashPaymentMethod.values()) {
+            getOrCreateConfig(ownerId, method);
+        }
+    }
+
+    /** Returns the owner's togglable cash-payment methods for the Settings screen. */
+    @Transactional
+    public List<CashPaymentAllowDto> getOwnerSettings(UUID ownerId) {
+        return CashPaymentMethod.configurableMethods().stream()
+                .map(method -> {
+                    CashPaymentAllow cfg = getOrCreateConfig(ownerId, method);
+                    return CashPaymentAllowDto.builder()
+                            .method(method.name())
+                            .displayName(method.getDisplayName())
+                            .isAllowed(Boolean.TRUE.equals(cfg.getIsAllowed()))
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public CashPaymentAllowDto updateOwnerSetting(UUID ownerId, String methodName, boolean isAllowed) {
+        CashPaymentMethod method;
+        try {
+            method = CashPaymentMethod.valueOf(methodName);
+        } catch (IllegalArgumentException e) {
+            throw new NotFoundException("Unknown cash payment method: " + methodName);
+        }
+        if (!method.isOwnerConfigurable()) {
+            throw new ConflictException(method.getDisplayName() + " cannot be configured");
+        }
+        CashPaymentAllow cfg = getOrCreateConfig(ownerId, method);
+        cfg.setIsAllowed(isAllowed);
+        allowRepository.save(cfg);
+        return CashPaymentAllowDto.builder()
+                .method(method.name())
+                .displayName(method.getDisplayName())
+                .isAllowed(isAllowed)
                 .build();
-        
-        otpRepository.save(cashPaymentOtp);
-        
-        // Send OTP to owner via SMS
+    }
+
+    private CashPaymentAllow getOrCreateConfig(UUID ownerId, CashPaymentMethod method) {
+        return allowRepository.findByOwnerIdAndMethodName(ownerId, method.name())
+                .orElseGet(() -> allowRepository.save(CashPaymentAllow.builder()
+                        .ownerId(ownerId)
+                        .methodName(method.name())
+                        // Non-configurable (core) flows are allowed by default.
+                        .isAllowed(!method.isOwnerConfigurable())
+                        .build()));
+    }
+
+    // ── Generic OTP engine ─────────────────────────────────────────────────────
+
+    /**
+     * Generates one OTP authorising every {@code requestId} for the given owner+method,
+     * sends it to the owner, and returns a masked confirmation message. Passing several
+     * request ids enables a single-OTP "pay all".
+     */
+    @Transactional
+    public String generateAndSend(User owner, CashPaymentMethod method, List<String> requestIds) {
+        if (requestIds == null || requestIds.isEmpty()) {
+            throw new ConflictException("No payment requests provided for OTP");
+        }
+
+        CashPaymentAllow config = getOrCreateConfig(owner.getUserId(), method);
+        if (method.isOwnerConfigurable() && !Boolean.TRUE.equals(config.getIsAllowed())) {
+            throw new ConflictException("Owner has not enabled cash payments for " + method.getDisplayName());
+        }
+
+        // Invalidate any outstanding authorisations for these requests to avoid stale OTPs.
+        for (String requestId : requestIds) {
+            List<PaymentOtp> outstanding = paymentOtpRepository.findByRequestIdAndUsedFalseOrderByCreatedAtDesc(requestId);
+            for (PaymentOtp po : outstanding) {
+                po.setUsed(true);
+            }
+            paymentOtpRepository.saveAll(outstanding);
+        }
+
+        String otp = generateOtp();
+        CashPaymentOtp otpRow = otpRepository.save(CashPaymentOtp.builder()
+                .otpHash(passwordEncoder.encode(otp))
+                .ownerPhone(owner.getPhoneNumber())
+                .expiryTime(Instant.now().plus(OTP_EXPIRY_MINUTES, ChronoUnit.MINUTES))
+                .build());
+
+        for (String requestId : requestIds) {
+            paymentOtpRepository.save(PaymentOtp.builder()
+                    .otpId(otpRow.getOtpId())
+                    .cpId(config.getCpId())
+                    .requestId(requestId)
+                    .used(false)
+                    .build());
+        }
+
         notificationService.sendCashPaymentOtp(owner, otp);
-        
+        log.info("Sent {} OTP authorising {} request(s) to owner {}", method, requestIds.size(), owner.getUserId());
         return "OTP sent to owner's mobile number ending with ******" + maskPhoneNumber(owner.getPhoneNumber());
     }
-    
+
+    /**
+     * Verifies an OTP for a single request and consumes that authorisation. The same
+     * OTP can still be used to verify the other requests it was issued for.
+     */
     @Transactional
-    public boolean verifyOtp(String agreementId, String otp) {
-        // Find valid OTP for this agreement
-        Optional<CashPaymentOtp> otpOpt = otpRepository.findByAgreementIdAndUsedFalseAndExpiryTimeAfter(
-                agreementId, 
-                Instant.now()
-        );
-        
-        if (otpOpt.isEmpty()) {
-            return false;
-        }
-        
-        CashPaymentOtp cashPaymentOtp = otpOpt.get();
-        
-        // Verify OTP using password encoder (handles BCrypt comparison)
-        boolean isValid = passwordEncoder.matches(otp, cashPaymentOtp.getOtpHash());
-        
-        if (isValid) {
-            // Mark OTP as used
-            cashPaymentOtp.setUsed(true);
-            otpRepository.save(cashPaymentOtp);
-        }
-        
-        return isValid;
-    }
-    
-    private String generateOtp() {
-        SecureRandom random = new SecureRandom();
-        int otp = 100000 + random.nextInt(900000); // 6-digit OTP
-        return String.valueOf(otp);
-    }
-    
-    private String maskPhoneNumber(String phoneNumber) {
-        if (phoneNumber == null || phoneNumber.length() < 4) {
-            return "****";
-        }
-        return phoneNumber.substring(phoneNumber.length() - 4);
-    }
-    
-    @Transactional
-    public String generateAndSendInstallmentOtp(String scheduleIdStr) {
-        java.util.UUID scheduleId = java.util.UUID.fromString(scheduleIdStr);
-        
-        System.out.println("=== GENERATING INSTALLMENT OTP ===");
-        System.out.println("Schedule ID: " + scheduleId);
-        
-        // First, invalidate any existing valid OTPs for this schedule to prevent duplicates
-        List<CashPaymentOtp> existingOtps = otpRepository.findAllByScheduleIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                scheduleId, 
-                Instant.now()
-        );
-        
-        if (!existingOtps.isEmpty()) {
-            System.out.println("Found " + existingOtps.size() + " existing valid OTPs - marking them as used");
-            for (CashPaymentOtp existingOtp : existingOtps) {
-                existingOtp.setUsed(true);
-                otpRepository.save(existingOtp);
-                System.out.println("Invalidated existing OTP: " + existingOtp.getOtpId());
+    public boolean verify(CashPaymentMethod method, String requestId, String otp) {
+        Instant now = Instant.now();
+        List<PaymentOtp> candidates = paymentOtpRepository.findByRequestIdAndUsedFalseOrderByCreatedAtDesc(requestId);
+
+        for (PaymentOtp po : candidates) {
+            CashPaymentOtp otpRow = otpRepository.findById(po.getOtpId()).orElse(null);
+            if (otpRow == null || otpRow.getExpiryTime().isBefore(now)) {
+                continue; // expired or missing
+            }
+            CashPaymentAllow cfg = allowRepository.findById(po.getCpId()).orElse(null);
+            if (cfg == null || !cfg.getMethodName().equals(method.name())) {
+                continue; // wrong method
+            }
+            if (passwordEncoder.matches(otp, otpRow.getOtpHash())) {
+                po.setUsed(true);
+                paymentOtpRepository.save(po);
+                log.info("Verified {} OTP for request {}", method, requestId);
+                return true;
             }
         }
-        
-        // Get payment schedule
-        com.krunity.HostelManagment.model.PaymentRequestSchedule schedule = scheduleRepository.findById(scheduleId)
-                .orElseThrow(() -> new NotFoundException("Payment schedule not found"));
-        
-        // Get agreement from tenant payment plan
-        String agreementId = schedule.getTenantPaymentPlan().getAgreementId();
-        Agreement agreement = agreementRepository.findById(agreementId)
-                .orElseThrow(() -> new NotFoundException("Agreement not found"));
-        
-        // Get owner from room
-        Room room = roomRepository.findById(agreement.getRoomId())
-                .orElseThrow(() -> new NotFoundException("Room not found"));
-        
-        User owner = room.getHostel().getOwner();
-        
-        // Generate 6-digit OTP
-        String otp = generateOtp();
-        System.out.println("Generated new OTP for owner: " + owner.getUsername());
-        
-        // Hash the OTP before storing
-        String otpHash = passwordEncoder.encode(otp);
-        
-        // Save OTP with expiry
-        CashPaymentOtp cashPaymentOtp = CashPaymentOtp.builder()
-                .scheduleId(scheduleId)
-                .ownerPhone(owner.getPhoneNumber())
-                .otpHash(otpHash)
-                .expiryTime(Instant.now().plus(OTP_EXPIRY_MINUTES, ChronoUnit.MINUTES))
-                .used(false)
-                .build();
-        
-        otpRepository.save(cashPaymentOtp);
-        System.out.println("Saved new OTP with ID: " + cashPaymentOtp.getOtpId());
-        
-        // Send OTP to owner via SMS
-        notificationService.sendCashPaymentOtp(owner, otp);
-        
-        System.out.println("=== OTP GENERATION COMPLETE ===");
-        return "OTP sent to owner's mobile number ending with ******" + maskPhoneNumber(owner.getPhoneNumber());
-    }
-    
-    @Transactional
-    public boolean verifyInstallmentOtp(java.util.UUID scheduleId, String otp) {
-        System.out.println("=== OTP VERIFICATION START ===");
-        System.out.println("Schedule ID: " + scheduleId);
-        System.out.println("OTP to verify: " + otp);
-        
-        // Find all valid OTPs for this schedule, ordered by creation date (most recent first)
-        List<CashPaymentOtp> validOtps = otpRepository.findAllByScheduleIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                scheduleId, 
-                Instant.now()
-        );
-        
-        if (validOtps.isEmpty()) {
-            System.out.println("No valid OTP found for schedule ID: " + scheduleId);
-            System.out.println("Current time: " + Instant.now());
-            
-            // Let's check if there are any OTPs for this schedule (regardless of expiry/used status)
-            List<CashPaymentOtp> allOtps = otpRepository.findAll().stream()
-                    .filter(o -> scheduleId.equals(o.getScheduleId()))
-                    .collect(java.util.stream.Collectors.toList());
-            
-            System.out.println("Found " + allOtps.size() + " OTPs for this schedule:");
-            for (CashPaymentOtp otpRecord : allOtps) {
-                System.out.println("  - OTP ID: " + otpRecord.getOtpId());
-                System.out.println("    Used: " + otpRecord.getUsed());
-                System.out.println("    Expiry: " + otpRecord.getExpiryTime());
-                System.out.println("    Created: " + otpRecord.getCreatedAt());
-                System.out.println("    Owner Phone: " + otpRecord.getOwnerPhone());
-            }
-            
-            return false;
-        }
-        
-        System.out.println("Found " + validOtps.size() + " valid OTP(s) for this schedule");
-        
-        // Use the most recent OTP (first in the list due to DESC ordering)
-        CashPaymentOtp cashPaymentOtp = validOtps.get(0);
-        System.out.println("Using most recent OTP record:");
-        System.out.println("  - OTP ID: " + cashPaymentOtp.getOtpId());
-        System.out.println("  - Created: " + cashPaymentOtp.getCreatedAt());
-        System.out.println("  - Expiry: " + cashPaymentOtp.getExpiryTime());
-        System.out.println("  - Used: " + cashPaymentOtp.getUsed());
-        System.out.println("  - Owner Phone: " + cashPaymentOtp.getOwnerPhone());
-        
-        // Verify OTP using password encoder (handles BCrypt comparison)
-        System.out.println("Comparing provided OTP with stored hash...");
-        boolean isValid = passwordEncoder.matches(otp, cashPaymentOtp.getOtpHash());
-        System.out.println("OTP comparison result: " + isValid);
-        
-        if (isValid) {
-            System.out.println("OTP is valid - marking ALL valid OTPs for this schedule as used");
-            // Mark ALL valid OTPs for this schedule as used to prevent reuse
-            for (CashPaymentOtp otpRecord : validOtps) {
-                otpRecord.setUsed(true);
-                otpRepository.save(otpRecord);
-                System.out.println("Marked OTP " + otpRecord.getOtpId() + " as used");
-            }
-        } else {
-            System.out.println("OTP is invalid");
-        }
-        
-        System.out.println("=== OTP VERIFICATION END ===");
-        return isValid;
-    }
-    
-    @Transactional
-    public String generateAndSendSettlementOtp(String settlementId) {
-        System.out.println("=== GENERATING SETTLEMENT OTP ===");
-        System.out.println("Settlement ID: " + settlementId);
-        
-        // First, invalidate any existing valid OTPs for this settlement to prevent duplicates
-        List<CashPaymentOtp> existingOtps = otpRepository.findAllBySettlementIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                settlementId, 
-                Instant.now()
-        );
-        
-        if (!existingOtps.isEmpty()) {
-            System.out.println("Found " + existingOtps.size() + " existing valid OTPs - marking them as used");
-            for (CashPaymentOtp existingOtp : existingOtps) {
-                existingOtp.setUsed(true);
-                otpRepository.save(existingOtp);
-                System.out.println("Invalidated existing OTP: " + existingOtp.getOtpId());
-            }
-        }
-        
-        // Get settlement details to find the owner
-        // We need to inject SettlementService or SettlementRepository to get settlement details
-        // For now, let's assume we can get the owner through the settlement
-        
-        // Generate 6-digit OTP
-        String otp = generateOtp();
-        System.out.println("Generated new OTP for settlement");
-        
-        // Hash the OTP before storing
-        String otpHash = passwordEncoder.encode(otp);
-        
-        // Save OTP with expiry
-        CashPaymentOtp cashPaymentOtp = CashPaymentOtp.builder()
-                .settlementId(settlementId)
-                .ownerPhone("1234567890") // This should be retrieved from settlement owner
-                .otpHash(otpHash)
-                .expiryTime(Instant.now().plus(OTP_EXPIRY_MINUTES, ChronoUnit.MINUTES))
-                .used(false)
-                .build();
-        
-        otpRepository.save(cashPaymentOtp);
-        System.out.println("Saved new OTP with ID: " + cashPaymentOtp.getOtpId());
-        
-        // Send OTP to owner via SMS
-        // notificationService.sendCashPaymentOtp(owner, otp);
-        
-        System.out.println("=== SETTLEMENT OTP GENERATION COMPLETE ===");
-        return "OTP sent to owner's mobile number ending with ******1890";
-    }
-    
-    @Transactional
-    public boolean verifySettlementOtp(String settlementId, String otp) {
-        System.out.println("=== SETTLEMENT OTP VERIFICATION START ===");
-        System.out.println("Settlement ID: " + settlementId);
-        System.out.println("OTP to verify: " + otp);
-        
-        // Find all valid OTPs for this settlement, ordered by creation date (most recent first)
-        List<CashPaymentOtp> validOtps = otpRepository.findAllBySettlementIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                settlementId, 
-                Instant.now()
-        );
-        
-        if (validOtps.isEmpty()) {
-            System.out.println("No valid OTP found for settlement ID: " + settlementId);
-            return false;
-        }
-        
-        System.out.println("Found " + validOtps.size() + " valid OTP(s) for this settlement");
-        
-        // Use the most recent OTP (first in the list due to DESC ordering)
-        CashPaymentOtp cashPaymentOtp = validOtps.get(0);
-        System.out.println("Using most recent OTP record:");
-        System.out.println("  - OTP ID: " + cashPaymentOtp.getOtpId());
-        System.out.println("  - Created: " + cashPaymentOtp.getCreatedAt());
-        System.out.println("  - Expiry: " + cashPaymentOtp.getExpiryTime());
-        
-        // Verify OTP using password encoder (handles BCrypt comparison)
-        System.out.println("Comparing provided OTP with stored hash...");
-        boolean isValid = passwordEncoder.matches(otp, cashPaymentOtp.getOtpHash());
-        System.out.println("OTP comparison result: " + isValid);
-        
-        if (isValid) {
-            System.out.println("OTP is valid - marking ALL valid OTPs for this settlement as used");
-            // Mark ALL valid OTPs for this settlement as used to prevent reuse
-            for (CashPaymentOtp otpRecord : validOtps) {
-                otpRecord.setUsed(true);
-                otpRepository.save(otpRecord);
-                System.out.println("Marked OTP " + otpRecord.getOtpId() + " as used");
-            }
-        } else {
-            System.out.println("OTP is invalid");
-        }
-        
-        System.out.println("=== SETTLEMENT OTP VERIFICATION END ===");
-        return isValid;
+        log.warn("No valid {} OTP for request {}", method, requestId);
+        return false;
     }
 
     @Transactional
     public void cleanupExpiredOtps() {
         otpRepository.deleteByExpiryTimeBefore(Instant.now());
     }
-    
-    @Autowired
-    private com.krunity.HostelManagment.repository.OtherChargeRepository otherChargeRepository;
-    
+
+    // ── Per-method wrappers (preserve existing call sites) ──────────────────────
+
+    @Transactional
+    public String generateAndSendOtp(String agreementId) {
+        return generateAndSend(ownerForAgreement(agreementId), CashPaymentMethod.AGREEMENT, List.of(agreementId));
+    }
+
+    @Transactional
+    public boolean verifyOtp(String agreementId, String otp) {
+        return verify(CashPaymentMethod.AGREEMENT, agreementId, otp);
+    }
+
+    @Transactional
+    public String generateAndSendInstallmentOtp(String scheduleIdStr) {
+        UUID scheduleId = UUID.fromString(scheduleIdStr);
+        PaymentRequestSchedule schedule = scheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new NotFoundException("Payment schedule not found"));
+        String agreementId = schedule.getTenantPaymentPlan().getAgreementId();
+        return generateAndSend(ownerForAgreement(agreementId), CashPaymentMethod.INSTALLMENT,
+                List.of(scheduleId.toString()));
+    }
+
+    @Transactional
+    public boolean verifyInstallmentOtp(UUID scheduleId, String otp) {
+        return verify(CashPaymentMethod.INSTALLMENT, scheduleId.toString(), otp);
+    }
+
     @Transactional
     public String generateAndSendOtherChargeOtp(String chargeId) {
-        System.out.println("=== GENERATING OTHER CHARGE OTP ===");
-        System.out.println("Charge ID: " + chargeId);
-        
-        // First, invalidate any existing valid OTPs for this charge to prevent duplicates
-        List<CashPaymentOtp> existingOtps = otpRepository.findAllByChargeIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                chargeId, 
-                Instant.now()
-        );
-        
-        if (!existingOtps.isEmpty()) {
-            System.out.println("Found " + existingOtps.size() + " existing valid OTPs - marking them as used");
-            for (CashPaymentOtp existingOtp : existingOtps) {
-                existingOtp.setUsed(true);
-                otpRepository.save(existingOtp);
-                System.out.println("Invalidated existing OTP: " + existingOtp.getOtpId());
-            }
-        }
-        
-        // Get other charge details to find the owner
-        java.util.UUID chargeUuid = java.util.UUID.fromString(chargeId);
-        com.krunity.HostelManagment.model.OtherCharge otherCharge = otherChargeRepository.findById(chargeUuid)
+        OtherCharge charge = otherChargeRepository.findById(UUID.fromString(chargeId))
                 .orElseThrow(() -> new NotFoundException("Other charge not found"));
-        
-        User owner = otherCharge.getOwner();
-        
-        // Generate 6-digit OTP
-        String otp = generateOtp();
-        System.out.println("Generated new OTP for other charge owner: " + owner.getUsername());
-        
-        // Hash the OTP before storing
-        String otpHash = passwordEncoder.encode(otp);
-        
-        // Save OTP with expiry
-        CashPaymentOtp cashPaymentOtp = CashPaymentOtp.builder()
-                .chargeId(chargeId)
-                .ownerPhone(owner.getPhoneNumber())
-                .otpHash(otpHash)
-                .expiryTime(Instant.now().plus(OTP_EXPIRY_MINUTES, ChronoUnit.MINUTES))
-                .used(false)
-                .build();
-        
-        otpRepository.save(cashPaymentOtp);
-        System.out.println("Saved new OTP with ID: " + cashPaymentOtp.getOtpId());
-        
-        // Send OTP to owner via SMS
-        notificationService.sendCashPaymentOtp(owner, otp);
-        
-        System.out.println("=== OTHER CHARGE OTP GENERATION COMPLETE ===");
-        return "OTP sent to owner's mobile number ending with *******" + maskPhoneNumber(owner.getPhoneNumber());
+        return generateAndSend(charge.getOwner(), CashPaymentMethod.OTHER_CHARGE, List.of(chargeId));
     }
-    
+
     @Transactional
     public boolean verifyOtherChargeOtp(String chargeId, String otp) {
-        System.out.println("=== OTHER CHARGE OTP VERIFICATION START ===");
-        System.out.println("Charge ID: " + chargeId);
-        System.out.println("OTP to verify: " + otp);
-        
-        // Find all valid OTPs for this charge, ordered by creation date (most recent first)
-        List<CashPaymentOtp> validOtps = otpRepository.findAllByChargeIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                chargeId, 
-                Instant.now()
-        );
-        
-        if (validOtps.isEmpty()) {
-            System.out.println("No valid OTP found for charge ID: " + chargeId);
-            return false;
-        }
-        
-        System.out.println("Found " + validOtps.size() + " valid OTP(s) for this charge");
-        
-        // Use the most recent OTP (first in the list due to DESC ordering)
-        CashPaymentOtp cashPaymentOtp = validOtps.get(0);
-        System.out.println("Using most recent OTP record:");
-        System.out.println("  - OTP ID: " + cashPaymentOtp.getOtpId());
-        System.out.println("  - Created: " + cashPaymentOtp.getCreatedAt());
-        System.out.println("  - Expiry: " + cashPaymentOtp.getExpiryTime());
-        
-        // Verify OTP using password encoder (handles BCrypt comparison)
-        System.out.println("Comparing provided OTP with stored hash...");
-        boolean isValid = passwordEncoder.matches(otp, cashPaymentOtp.getOtpHash());
-        System.out.println("OTP comparison result: " + isValid);
-        
-        if (isValid) {
-            System.out.println("OTP is valid - marking ALL valid OTPs for this charge as used");
-            // Mark ALL valid OTPs for this charge as used to prevent reuse
-            for (CashPaymentOtp otpRecord : validOtps) {
-                otpRecord.setUsed(true);
-                otpRepository.save(otpRecord);
-                System.out.println("Marked OTP " + otpRecord.getOtpId() + " as used");
-            }
-        } else {
-            System.out.println("OTP is invalid");
-        }
-        
-        System.out.println("=== OTHER CHARGE OTP VERIFICATION END ===");
-        return isValid;
+        return verify(CashPaymentMethod.OTHER_CHARGE, chargeId, otp);
     }
-    
+
     @Transactional
     public String generateAndSendElectricityOtp(String billIdStr) {
-        java.util.UUID billId = java.util.UUID.fromString(billIdStr);
-        
-        System.out.println("=== GENERATING ELECTRICITY BILL OTP ===");
-        System.out.println("Bill ID: " + billId);
-        
-        // Invalidate any existing valid OTPs for this bill
-        List<CashPaymentOtp> existingOtps = otpRepository.findAllByElectricityBillIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                billId, 
-                Instant.now()
-        );
-        
-        if (!existingOtps.isEmpty()) {
-            System.out.println("Found " + existingOtps.size() + " existing valid OTPs - marking them as used");
-            for (CashPaymentOtp existingOtp : existingOtps) {
-                existingOtp.setUsed(true);
-                otpRepository.save(existingOtp);
-            }
-        }
-        
-        // Get bill details to find the owner
-        com.krunity.HostelManagment.model.ElectricityBill bill = electricityBillRepository.findById(billId)
+        UUID billId = UUID.fromString(billIdStr);
+        ElectricityBill bill = electricityBillRepository.findById(billId)
                 .orElseThrow(() -> new NotFoundException("Electricity bill not found"));
-        
-        // Get owner from bill's room
         Room room = roomRepository.findById(bill.getRoomId())
                 .orElseThrow(() -> new NotFoundException("Room not found"));
-        
-        User owner = room.getHostel().getOwner();
-        
-        // Generate 6-digit OTP
-        String otp = generateOtp();
-        System.out.println("Generated new OTP for electricity bill owner: " + owner.getUsername());
-        
-        // Hash the OTP before storing
-        String otpHash = passwordEncoder.encode(otp);
-        
-        // Save OTP with expiry
-        CashPaymentOtp cashPaymentOtp = CashPaymentOtp.builder()
-                .electricityBillId(billId)
-                .ownerPhone(owner.getPhoneNumber())
-                .otpHash(otpHash)
-                .expiryTime(Instant.now().plus(OTP_EXPIRY_MINUTES, ChronoUnit.MINUTES))
-                .used(false)
-                .build();
-        
-        otpRepository.save(cashPaymentOtp);
-        System.out.println("Saved new OTP with ID: " + cashPaymentOtp.getOtpId());
-        
-        // Send OTP to owner via SMS
-        notificationService.sendCashPaymentOtp(owner, otp);
-        
-        System.out.println("=== ELECTRICITY BILL OTP GENERATION COMPLETE ===");
-        return "OTP sent to owner's mobile number ending with ******" + maskPhoneNumber(owner.getPhoneNumber());
+        return generateAndSend(room.getHostel().getOwner(), CashPaymentMethod.ELECTRICITY_BILL,
+                List.of(billId.toString()));
     }
-    
+
     @Transactional
-    public boolean verifyElectricityOtp(java.util.UUID billId, String otp) {
-        System.out.println("=== ELECTRICITY BILL OTP VERIFICATION START ===");
-        System.out.println("Bill ID: " + billId);
-        
-        // Find all valid OTPs for this bill, ordered by creation date (most recent first)
-        List<CashPaymentOtp> validOtps = otpRepository.findAllByElectricityBillIdAndUsedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
-                billId, 
-                Instant.now()
-        );
-        
-        if (validOtps.isEmpty()) {
-            System.out.println("No valid OTP found for bill ID: " + billId);
-            return false;
+    public boolean verifyElectricityOtp(UUID billId, String otp) {
+        return verify(CashPaymentMethod.ELECTRICITY_BILL, billId.toString(), otp);
+    }
+
+    @Transactional
+    public String generateAndSendSettlementOtp(String settlementId) {
+        SettlementRequest settlement = settlementRequestRepository.findById(UUID.fromString(settlementId))
+                .orElseThrow(() -> new NotFoundException("Settlement not found"));
+        return generateAndSend(settlement.getOwner(), CashPaymentMethod.SETTLEMENT, List.of(settlementId));
+    }
+
+    @Transactional
+    public boolean verifySettlementOtp(String settlementId, String otp) {
+        return verify(CashPaymentMethod.SETTLEMENT, settlementId, otp);
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────────
+
+    private User ownerForAgreement(String agreementId) {
+        Agreement agreement = agreementRepository.findById(agreementId)
+                .orElseThrow(() -> new NotFoundException("Agreement not found"));
+        Room room = roomRepository.findById(agreement.getRoomId())
+                .orElseThrow(() -> new NotFoundException("Room not found"));
+        return room.getHostel().getOwner();
+    }
+
+    private String generateOtp() {
+        return String.valueOf(100000 + RANDOM.nextInt(900000)); // 6-digit
+    }
+
+    private String maskPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.length() < 4) {
+            return "****";
         }
-        
-        System.out.println("Found " + validOtps.size() + " valid OTP(s) for this bill");
-        
-        // Use the most recent OTP
-        CashPaymentOtp cashPaymentOtp = validOtps.get(0);
-        
-        // Verify OTP using password encoder
-        boolean isValid = passwordEncoder.matches(otp, cashPaymentOtp.getOtpHash());
-        System.out.println("OTP comparison result: " + isValid);
-        
-        if (isValid) {
-            System.out.println("OTP is valid - marking ALL valid OTPs for this bill as used");
-            for (CashPaymentOtp otpRecord : validOtps) {
-                otpRecord.setUsed(true);
-                otpRepository.save(otpRecord);
-            }
-        }
-        
-        System.out.println("=== ELECTRICITY BILL OTP VERIFICATION END ===");
-        return isValid;
+        return phoneNumber.substring(phoneNumber.length() - 4);
     }
 }

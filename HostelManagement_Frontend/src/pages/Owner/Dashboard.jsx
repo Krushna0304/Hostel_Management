@@ -89,7 +89,7 @@ const OwnerDashboard = () => {
   ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Overview"
         title="Run your hostels like a modern SaaS operation"

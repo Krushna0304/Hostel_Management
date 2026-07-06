@@ -17,8 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +35,7 @@ public class OtherChargeService {
 
     private final OtherChargeRepository otherChargeRepository;
     private final OtherChargeInstallmentRepository installmentRepository;
+    private final OtherChargePaymentRepository otherChargePaymentRepository;
     private final UserRepository userRepository;
     private final RoomRepository roomRepository;
     private final HostelRepository hostelRepository;
@@ -40,6 +43,10 @@ public class OtherChargeService {
     private final NotificationService notificationService;
     private final SmsTemplateService smsTemplateService;
     private final SubscriptionService subscriptionService;
+
+    // A tenant is included in a room (split) charge only if they have occupied the
+    // room for at least this many days, mirroring the electricity bill rule.
+    private static final long MIN_OCCUPANCY_DAYS = 15;
 
     @Transactional
     public OtherChargeResponse createOtherCharge(OtherChargeRequest request, UUID ownerId) {
@@ -98,9 +105,12 @@ public class OtherChargeService {
 
         charge = otherChargeRepository.save(charge);
 
-        // Create installments if enabled
+        // Create installments if enabled; otherwise split a room charge into one
+        // PENDING share per eligible tenant (full-payment split-among-tenants).
         if (request.getInstallmentEnabled() && request.getInstallmentCount() != null && request.getInstallmentCount() > 1) {
             createInstallments(charge);
+        } else if (charge.isRoomBased()) {
+            createRoomChargeShares(charge);
         }
 
         // Send SMS notification to affected tenants if owner has SMS reminders enabled
@@ -165,12 +175,60 @@ public class OtherChargeService {
             return List.of(charge.getTenant());
         } else if (charge.isRoomBased()) {
             // Get current tenants in the room
-            List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.CONFIRMED);
+            List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.ACTIVE);
             return allotments.stream()
                     .map(RoomAllotment::getTenant)
                     .collect(Collectors.toList());
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * Splits a room-based, full-payment charge equally among the room's eligible
+     * tenants and persists one PENDING {@link OtherChargePayment} share per tenant.
+     * Eligible = currently occupying the room and allotted for at least
+     * {@link #MIN_OCCUPANCY_DAYS} days (same rule as electricity bills).
+     */
+    private void createRoomChargeShares(OtherCharge charge) {
+        LocalDate today = LocalDate.now();
+        List<User> eligible = roomAllotmentRepository
+                .findByRoomAndRoomAllotmentStatusIn(charge.getRoom(), RoomAllotmentStatus.occupyingStatuses())
+                .stream()
+                .filter(a -> a.getStartDate() != null
+                        && ChronoUnit.DAYS.between(a.getStartDate(), today) >= MIN_OCCUPANCY_DAYS)
+                .map(RoomAllotment::getTenant)
+                .collect(Collectors.toList());
+
+        if (eligible.isEmpty()) {
+            log.warn("No eligible tenants for room charge {}; no shares created", charge.getChargeId());
+            return;
+        }
+
+        List<BigDecimal> shares = splitAmount(charge.getAmount(), eligible.size());
+        for (int i = 0; i < eligible.size(); i++) {
+            otherChargePaymentRepository.save(OtherChargePayment.builder()
+                    .chargeId(charge.getChargeId())
+                    .tenantId(eligible.get(i).getUserId())
+                    .amount(shares.get(i))
+                    .status(PaymentStatus.PENDING)
+                    .build());
+        }
+        log.info("Room charge {} split into {} share(s)", charge.getChargeId(), eligible.size());
+    }
+
+    /**
+     * Divides {@code total} into {@code parts} 2-decimal amounts that sum exactly to
+     * {@code total}; any rounding remainder is added to the first share.
+     */
+    private List<BigDecimal> splitAmount(BigDecimal total, int parts) {
+        BigDecimal base = total.divide(BigDecimal.valueOf(parts), 2, RoundingMode.DOWN);
+        List<BigDecimal> shares = new ArrayList<>();
+        for (int i = 0; i < parts; i++) {
+            shares.add(base);
+        }
+        BigDecimal remainder = total.subtract(base.multiply(BigDecimal.valueOf(parts)));
+        shares.set(0, shares.get(0).add(remainder));
+        return shares;
     }
 
     public List<OtherChargeResponse> getChargesByOwner(UUID ownerId) {
@@ -198,7 +256,7 @@ public class OtherChargeService {
         List<OtherCharge> charges = otherChargeRepository.findByTenantAndActiveTrue(tenant);
         
         // Also get room-based charges for rooms where tenant is currently living
-        List<RoomAllotment> allotments = roomAllotmentRepository.findByTenantAndRoomAllotmentStatus(tenant, RoomAllotmentStatus.CONFIRMED);
+        List<RoomAllotment> allotments = roomAllotmentRepository.findByTenantAndRoomAllotmentStatus(tenant, RoomAllotmentStatus.ACTIVE);
         for (RoomAllotment allotment : allotments) {
             List<OtherCharge> roomCharges = otherChargeRepository.findByRoomAndActiveTrue(allotment.getRoom());
             charges.addAll(roomCharges);
@@ -207,7 +265,42 @@ public class OtherChargeService {
         return charges.stream()
                 .distinct()
                 .map(this::mapToResponse)
+                // A split charge is only relevant to tenants who actually hold a share.
+                .filter(resp -> tenantHasShareOrNotSplit(resp, tenantId))
+                .map(resp -> applyTenantShareView(resp, tenantId))
                 .collect(Collectors.toList());
+    }
+
+    /** True unless this is a split charge in which the tenant holds no share. */
+    private boolean tenantHasShareOrNotSplit(OtherChargeResponse resp, UUID tenantId) {
+        boolean isSplit = resp.getRoomTenants() != null
+                && resp.getRoomTenants().stream().anyMatch(t -> t.getPaymentStatus() != null);
+        if (!isSplit) {
+            return true;
+        }
+        return resp.getRoomTenants().stream().anyMatch(t -> tenantId.equals(t.getTenantId()));
+    }
+
+    /**
+     * For a room (split) charge, rewrite the response so its status/amounts reflect
+     * the viewing tenant's own share rather than the whole charge. This lets the
+     * tenant UI show their share as paid even while other tenants are still pending.
+     */
+    private OtherChargeResponse applyTenantShareView(OtherChargeResponse resp, UUID tenantId) {
+        if (resp.getRoomTenants() == null) {
+            return resp;
+        }
+        resp.getRoomTenants().stream()
+                .filter(t -> tenantId.equals(t.getTenantId()) && t.getPaymentStatus() != null)
+                .findFirst()
+                .ifPresent(share -> {
+                    share.setCurrentTenant(true);
+                    boolean paid = share.getPaymentStatus() == PaymentStatus.COMPLETED;
+                    resp.setPaymentStatus(share.getPaymentStatus());
+                    resp.setPaidAmount(paid ? share.getSplitAmount() : BigDecimal.ZERO);
+                    resp.setRemainingAmount(paid ? BigDecimal.ZERO : share.getSplitAmount());
+                });
+        return resp;
     }
 
     public OtherChargeResponse getChargeById(UUID chargeId) {
@@ -350,23 +443,38 @@ public class OtherChargeService {
             builder.roomId(charge.getRoom().getRoomId())
                    .roomNumber(charge.getRoom().getRoomNumber());
 
-            // Get current tenants in the room
-            List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.CONFIRMED);
-            List<OtherChargeResponse.TenantSummary> roomTenants = allotments.stream()
-                    .map(allotment -> {
-                        BigDecimal splitAmount = charge.getAmount().divide(
-                                BigDecimal.valueOf(allotments.size()), 
-                                2, 
-                                RoundingMode.HALF_UP
-                        );
-                        return OtherChargeResponse.TenantSummary.builder()
-                                .tenantId(allotment.getTenant().getUserId())
-                                .tenantName(allotment.getTenant().getDisplayName())
-                                .phoneNumber(allotment.getTenant().getPhoneNumber())
-                                .splitAmount(splitAmount)
-                                .build();
-                    })
-                    .collect(Collectors.toList());
+            List<OtherChargePayment> shares = otherChargePaymentRepository.findByChargeId(charge.getChargeId());
+            List<OtherChargeResponse.TenantSummary> roomTenants;
+
+            if (!shares.isEmpty()) {
+                // Full-payment split charge: one fixed share per tenant, with status.
+                roomTenants = shares.stream()
+                        .map(share -> OtherChargeResponse.TenantSummary.builder()
+                                .tenantId(share.getTenantId())
+                                .tenantName(share.getTenant() != null ? share.getTenant().getDisplayName() : "N/A")
+                                .phoneNumber(share.getTenant() != null ? share.getTenant().getPhoneNumber() : null)
+                                .splitAmount(share.getAmount())
+                                .paymentStatus(share.getStatus())
+                                .paidAt(share.getPaidAt())
+                                .build())
+                        .collect(Collectors.toList());
+            } else {
+                // Installment / legacy charge: compute the split dynamically from
+                // current occupants for display only.
+                List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.ACTIVE);
+                roomTenants = allotments.stream()
+                        .map(allotment -> {
+                            BigDecimal splitAmount = allotments.isEmpty() ? charge.getAmount()
+                                    : charge.getAmount().divide(BigDecimal.valueOf(allotments.size()), 2, RoundingMode.HALF_UP);
+                            return OtherChargeResponse.TenantSummary.builder()
+                                    .tenantId(allotment.getTenant().getUserId())
+                                    .tenantName(allotment.getTenant().getDisplayName())
+                                    .phoneNumber(allotment.getTenant().getPhoneNumber())
+                                    .splitAmount(splitAmount)
+                                    .build();
+                        })
+                        .collect(Collectors.toList());
+            }
             builder.roomTenants(roomTenants);
         }
 

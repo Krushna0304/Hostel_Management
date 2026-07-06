@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -30,6 +31,7 @@ public class OtherChargePaymentService {
 
     private final OtherChargeRepository otherChargeRepository;
     private final OtherChargeInstallmentRepository installmentRepository;
+    private final OtherChargePaymentRepository otherChargePaymentRepository;
     private final TransactionRepository transactionRepository;
     private final PaymentService paymentService;
     private final UserRepository userRepository;
@@ -224,14 +226,50 @@ public class OtherChargePaymentService {
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Tenant not found"));
 
-        // Update charge payment status
+        // Room (split) charge: pay the tenant's own share, then roll up to the charge.
+        Optional<OtherChargePayment> shareOpt = charge.isRoomBased()
+                ? otherChargePaymentRepository.findByChargeIdAndTenantId(chargeId, tenantId)
+                : Optional.empty();
+
+        if (shareOpt.isPresent()) {
+            OtherChargePayment share = shareOpt.get();
+            if (share.getStatus() == PaymentStatus.COMPLETED) {
+                throw new IllegalArgumentException("This tenant's share is already paid");
+            }
+            share.setStatus(PaymentStatus.COMPLETED);
+            share.setPaymentMode(transactionId.startsWith("CASH_") ? TransactionMode.CASH : TransactionMode.ONLINE);
+            share.setPaidAt(LocalDateTime.now());
+            share.setTransactionId(transactionId);
+            otherChargePaymentRepository.save(share);
+
+            // Roll up the charge from its shares.
+            List<OtherChargePayment> shares = otherChargePaymentRepository.findByChargeId(chargeId);
+            BigDecimal totalPaid = shares.stream()
+                    .filter(s -> s.getStatus() == PaymentStatus.COMPLETED)
+                    .map(OtherChargePayment::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            boolean allPaid = shares.stream().allMatch(s -> s.getStatus() == PaymentStatus.COMPLETED);
+
+            charge.setPaidAmount(totalPaid);
+            charge.setPaymentStatus(allPaid ? PaymentStatus.COMPLETED : PaymentStatus.PARTIALLY_PAID);
+            if (allPaid) {
+                charge.setPaidDate(LocalDateTime.now());
+            }
+            otherChargeRepository.save(charge);
+
+            createTransactionRecord(charge, tenant, share.getAmount(), transactionId);
+            log.info("Processed share payment for room charge: {} tenant: {} amount: {}",
+                    chargeId, tenantId, share.getAmount());
+            return;
+        }
+
+        // Tenant-specific charge: update the charge directly.
         BigDecimal currentPaid = charge.getPaidAmount() != null ? charge.getPaidAmount() : BigDecimal.ZERO;
         BigDecimal newPaidAmount = currentPaid.add(amount);
 
         charge.setPaidAmount(newPaidAmount);
         charge.setPaidDate(LocalDateTime.now());
 
-        // Update payment status
         if (newPaidAmount.compareTo(charge.getAmount()) >= 0) {
             charge.setPaymentStatus(PaymentStatus.COMPLETED);
         } else {
@@ -305,8 +343,14 @@ public class OtherChargePaymentService {
         if (charge.isTenantSpecific()) {
             return charge.getAmount();
         } else if (charge.isRoomBased()) {
-            // Calculate split amount based on current room occupancy
-            List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.CONFIRMED);
+            // Use the tenant's fixed share if the charge was split into shares.
+            Optional<OtherChargePayment> share = otherChargePaymentRepository
+                    .findByChargeIdAndTenantId(charge.getChargeId(), tenant.getUserId());
+            if (share.isPresent()) {
+                return share.get().getAmount();
+            }
+            // Legacy fallback: dynamic split by current occupancy.
+            List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.ACTIVE);
             if (allotments.isEmpty()) {
                 throw new IllegalArgumentException("No active tenants in room");
             }
@@ -321,8 +365,16 @@ public class OtherChargePaymentService {
                 throw new IllegalArgumentException("Not authorized to pay this charge");
             }
         } else if (charge.isRoomBased()) {
-            // Check if tenant is currently in the room
-            List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.CONFIRMED);
+            // If the charge was split into shares, the tenant must own one.
+            if (otherChargePaymentRepository.existsByChargeId(charge.getChargeId())) {
+                if (otherChargePaymentRepository
+                        .findByChargeIdAndTenantId(charge.getChargeId(), tenant.getUserId()).isEmpty()) {
+                    throw new IllegalArgumentException("This tenant does not have a share in this charge");
+                }
+                return;
+            }
+            // Legacy fallback: must be a current occupant.
+            List<RoomAllotment> allotments = roomAllotmentRepository.findByRoomAndRoomAllotmentStatus(charge.getRoom(), RoomAllotmentStatus.ACTIVE);
             boolean tenantInRoom = allotments.stream()
                     .anyMatch(allotment -> allotment.getTenant().getUserId().equals(tenant.getUserId()));
             if (!tenantInRoom) {
@@ -336,7 +388,7 @@ public class OtherChargePaymentService {
         Transaction transaction = Transaction.builder()
                 .fromUser(tenant)
                 .toUser(charge.getOwner())
-                .amount(amount.multiply(BigDecimal.valueOf(100)).longValue()) // Convert to paise
+                .amount(amount.longValue()) // Transaction.amount is stored in rupees
                 .mode(transactionId.startsWith("CASH_") ? TransactionMode.CASH : TransactionMode.ONLINE)
                 .status(TransactionStatus.COMPLETED)
                 .reason("Payment for other charge: " + charge.getChargeName())
@@ -353,7 +405,7 @@ public class OtherChargePaymentService {
         Transaction transaction = Transaction.builder()
                 .fromUser(tenant)
                 .toUser(installment.getOtherCharge().getOwner())
-                .amount(amount.multiply(BigDecimal.valueOf(100)).longValue()) // Convert to paise
+                .amount(amount.longValue()) // Transaction.amount is stored in rupees
                 .mode(transactionId.startsWith("CASH_") ? TransactionMode.CASH : TransactionMode.ONLINE)
                 .status(TransactionStatus.COMPLETED)
                 .reason("Installment payment for: " + installment.getOtherCharge().getChargeName())

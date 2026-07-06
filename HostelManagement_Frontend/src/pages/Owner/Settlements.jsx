@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button } from '../../components/ui/Button';
+import { Alert, Button } from '../../components/ui';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 import SettlementCalculationModal from '../../components/SettlementCalculationModal';
@@ -13,10 +13,13 @@ import { useSuccessPopup } from '../../hooks/useSuccessPopup';
 const Settlements = () => {
   const [settlements, setSettlements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedSettlement, setSelectedSettlement] = useState(null);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [confirmLeftSettlement, setConfirmLeftSettlement] = useState(null);
+  const [confirmingLeft, setConfirmingLeft] = useState(false);
   const { showSuccess } = useSuccessPopup();
 
   useEffect(() => {
@@ -25,10 +28,12 @@ const Settlements = () => {
 
   const fetchSettlements = async () => {
     try {
+      setLoading(true);
+      setError('');
       const data = await settlementService.getOwnerSettlements();
       setSettlements(data);
-    } catch (error) {
-      console.error('Error fetching settlements:', error);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load settlement requests.');
     } finally {
       setLoading(false);
     }
@@ -47,6 +52,21 @@ const Settlements = () => {
   const handleMakePayment = (settlement) => {
     setSelectedSettlement(settlement);
     setShowPaymentModal(true);
+  };
+
+  const handleOwnerConfirmLeft = async () => {
+    try {
+      setConfirmingLeft(true);
+      await settlementService.ownerConfirmLeft(confirmLeftSettlement.allotmentId);
+      showSuccess('Confirmed tenant has left. Allotment will be marked as LEFT once both parties confirm.');
+      setConfirmLeftSettlement(null);
+      fetchSettlements();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to confirm. Please try again.');
+      setConfirmLeftSettlement(null);
+    } finally {
+      setConfirmingLeft(false);
+    }
   };
 
   const handleCompletePayment = async (settlementId) => {
@@ -102,6 +122,32 @@ const Settlements = () => {
       );
     }
     
+    if (settlement.allotmentStatus === 'ON_NOTICE_PERIOD' && !settlement.ownerMarkedLeft) {
+      return (
+        <div className="flex flex-col gap-2 w-full">
+          {settlement.tenantMarkedLeft && (
+            <p className="text-xs text-amber-700 font-medium text-center">
+              Tenant has confirmed vacating. Waiting for your confirmation.
+            </p>
+          )}
+          <Button
+            onClick={() => setConfirmLeftSettlement(settlement)}
+            variant="warning"
+            className="w-full"
+          >
+            Confirm Tenant Left
+          </Button>
+          <Button
+            onClick={() => handleViewSettlement(settlement)}
+            variant="outline"
+            className="w-full"
+          >
+            View Details
+          </Button>
+        </div>
+      );
+    }
+
     return (
       <Button
         onClick={() => handleViewSettlement(settlement)}
@@ -126,7 +172,16 @@ const Settlements = () => {
         </div>
       </div>
 
-      {settlements.length === 0 ? (
+      {error ? (
+        <Alert tone="error">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{error}</span>
+            <Button label="Retry" variant="secondary" onClick={fetchSettlements} />
+          </div>
+        </Alert>
+      ) : null}
+
+      {!error && settlements.length === 0 ? (
         <EmptyState
           title="No Settlement Requests"
           description="You don't have any settlement requests yet. Tenants can request settlements from their dashboard."
@@ -182,6 +237,33 @@ const Settlements = () => {
           }}
           onSuccess={fetchSettlements}
         />
+      )}
+
+      {confirmLeftSettlement && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">Confirm vacating</p>
+            <h3 className="mt-2 text-xl font-bold text-slate-950">Confirm {confirmLeftSettlement.tenantName} has left?</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Room: <strong>{confirmLeftSettlement.roomNumber}</strong>. This confirms the tenant has physically vacated the room.
+              {!confirmLeftSettlement.tenantMarkedLeft && ' The tenant will also need to confirm before the allotment is marked as LEFT.'}
+            </p>
+            <div className="mt-5 flex gap-3">
+              <Button
+                label="Cancel"
+                variant="secondary"
+                fullWidth
+                onClick={() => setConfirmLeftSettlement(null)}
+              />
+              <Button
+                label="Yes, tenant has left"
+                fullWidth
+                loading={confirmingLeft}
+                onClick={handleOwnerConfirmLeft}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

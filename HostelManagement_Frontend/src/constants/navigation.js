@@ -12,16 +12,16 @@ export const ownerNavigation = [
     description: 'Manage your properties',
   },
   {
-    label: 'Agreements',
-    to: '/owner/agreements',
-    icon: 'clipboard',
-    description: 'Manage onboarding flows',
-  },
-  {
     label: 'Plans',
     to: '/owner/plans',
     icon: 'document',
     description: 'Manage tenant plans',
+  },
+  {
+    label: 'Agreements',
+    to: '/owner/agreements',
+    icon: 'clipboard',
+    description: 'Manage onboarding flows',
   },
   {
     label: 'Collections',

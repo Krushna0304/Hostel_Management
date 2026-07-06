@@ -333,17 +333,22 @@ export default function TenantActivatePage() {
                         const water = Number(agreement.planSnapshot.charges?.utilityCharges?.water?.monthlyAmount) || 0
                         const deepCleaning = Number(agreement.planSnapshot.charges?.cleaningCharges?.deepCleaningOnExit?.amount) || 0
 
-                        // Calculate custom charges
-                        const customOneTimeCharges = (agreement.planSnapshot.charges?.customCharges?.oneTimeCharges || []).reduce((total, charge) => {
-                          return total + (Number(charge.amount) || 0)
-                        }, 0)
+                        // Custom one-time charges (fall back to top-level for backward compatibility), split by refundability
+                        const customOneTime = agreement.planSnapshot.charges?.customCharges?.oneTimeCharges || agreement.planSnapshot.oneTimeCharges || []
+                        const customRefundableOneTime = customOneTime
+                          .filter(c => c.refundable)
+                          .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+                        const customNonRefundableOneTime = customOneTime
+                          .filter(c => !c.refundable)
+                          .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
 
-                        const customMonthlyRecurringCharges = (agreement.planSnapshot.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
+                        const customMonthlyRecurringCharges = (agreement.planSnapshot.charges?.customCharges?.monthlyRecurringCharges || agreement.planSnapshot.monthlyRecurringCharges || []).reduce((total, charge) => {
                           return total + (Number(charge.amount) || 0)
                         }, 0)
 
                         // Total calculations
-                        const totalOneTimeCharges = oneTimeMaintenance + customOneTimeCharges
+                        const refundableDeposits = securityDeposit + customRefundableOneTime
+                        const totalOneTimeCharges = oneTimeMaintenance + customNonRefundableOneTime
                         const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
                         const monthlyTotal = baseRent + recurringCharges
 
@@ -352,7 +357,7 @@ export default function TenantActivatePage() {
                         const numberOfInstallments = Number(agreement.planSnapshot.paymentModel?.installments) || 1
                         const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
                         const installmentAmount = monthlyTotal * monthsPerInstallment
-                        const activationTotal = installmentAmount + securityDeposit + totalOneTimeCharges
+                        const activationTotal = installmentAmount + refundableDeposits + totalOneTimeCharges
 
                         return (
                           <div className="space-y-3">
@@ -366,15 +371,15 @@ export default function TenantActivatePage() {
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-blue-700">Refundable Deposits:</span>
-                                  <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                                  <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-blue-700">One-time Charges:</span>
                                   <span className="font-semibold text-blue-900">₹{totalOneTimeCharges.toLocaleString()}</span>
                                 </div>
-                                
-                                {/* Show breakdown of one-time charges */}
-                                {(totalOneTimeCharges > 0) && (
+
+                                {/* Breakdown of non-refundable one-time charges */}
+                                {(oneTimeMaintenance > 0 || customOneTime.some(c => !c.refundable)) && (
                                   <div className="ml-3 space-y-1 text-xs text-blue-600">
                                     {oneTimeMaintenance > 0 && (
                                       <div className="flex justify-between">
@@ -382,7 +387,7 @@ export default function TenantActivatePage() {
                                         <span>₹{oneTimeMaintenance.toLocaleString()}</span>
                                       </div>
                                     )}
-                                    {agreement.planSnapshot.charges?.customCharges?.oneTimeCharges && agreement.planSnapshot.charges.customCharges.oneTimeCharges.map((charge, index) => (
+                                    {customOneTime.filter(c => !c.refundable).map((charge, index) => (
                                       <div key={index} className="flex justify-between">
                                         <span>• {charge.chargeName}:</span>
                                         <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -390,7 +395,25 @@ export default function TenantActivatePage() {
                                     ))}
                                   </div>
                                 )}
-                                
+
+                                {/* Breakdown of refundable deposits */}
+                                {customOneTime.some(c => c.refundable) && (
+                                  <div className="ml-3 space-y-1 text-xs text-blue-600">
+                                    {securityDeposit > 0 && (
+                                      <div className="flex justify-between">
+                                        <span>• Security Deposit:</span>
+                                        <span>₹{securityDeposit.toLocaleString()}</span>
+                                      </div>
+                                    )}
+                                    {customOneTime.filter(c => c.refundable).map((charge, index) => (
+                                      <div key={index} className="flex justify-between">
+                                        <span>• {charge.chargeName}:</span>
+                                        <span>₹{Number(charge.amount).toLocaleString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
                                 <div className="border-t border-blue-300 pt-2 flex justify-between">
                                   <span className="font-semibold text-blue-900">Total Activation:</span>
                                   <span className="font-bold text-blue-800 text-lg">₹{activationTotal.toLocaleString()}</span>
@@ -438,7 +461,7 @@ export default function TenantActivatePage() {
                                         <span>₹{water.toLocaleString()}</span>
                                       </div>
                                     )}
-                                    {agreement.planSnapshot.charges?.customCharges?.monthlyRecurringCharges && agreement.planSnapshot.charges.customCharges.monthlyRecurringCharges.map((charge, index) => (
+                                    {(agreement.planSnapshot.charges?.customCharges?.monthlyRecurringCharges || agreement.planSnapshot.monthlyRecurringCharges || []).map((charge, index) => (
                                       <div key={index} className="flex justify-between">
                                         <span>• {charge.chargeName}:</span>
                                         <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -484,7 +507,7 @@ export default function TenantActivatePage() {
                               <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
                                   <span className="text-slate-700">Refundable Amount:</span>
-                                  <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                                  <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-700">Potential Deductions:</span>
@@ -492,7 +515,7 @@ export default function TenantActivatePage() {
                                 </div>
                                 <div className="border-t border-slate-300 pt-2 flex justify-between">
                                   <span className="font-semibold text-slate-900">Net Refund Estimate:</span>
-                                  <span className="font-bold text-blue-700">₹{(securityDeposit - deepCleaning).toLocaleString()}</span>
+                                  <span className="font-bold text-blue-700">₹{(refundableDeposits - deepCleaning).toLocaleString()}</span>
                                 </div>
                               </div>
                             </div>
@@ -793,17 +816,22 @@ export default function TenantActivatePage() {
                         const electricity = Number(agreement.planSnapshot.charges?.utilityCharges?.electricity?.fixedAmount) || 0
                         const water = Number(agreement.planSnapshot.charges?.utilityCharges?.water?.monthlyAmount) || 0
 
-                        // Calculate custom charges
-                        const customOneTimeCharges = (agreement.planSnapshot.charges?.customCharges?.oneTimeCharges || []).reduce((total, charge) => {
-                          return total + (Number(charge.amount) || 0)
-                        }, 0)
+                        // Custom one-time charges (fall back to top-level for backward compatibility), split by refundability
+                        const customOneTime = agreement.planSnapshot.charges?.customCharges?.oneTimeCharges || agreement.planSnapshot.oneTimeCharges || []
+                        const customRefundableOneTime = customOneTime
+                          .filter(c => c.refundable)
+                          .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+                        const customNonRefundableOneTime = customOneTime
+                          .filter(c => !c.refundable)
+                          .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
 
-                        const customMonthlyRecurringCharges = (agreement.planSnapshot.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
+                        const customMonthlyRecurringCharges = (agreement.planSnapshot.charges?.customCharges?.monthlyRecurringCharges || agreement.planSnapshot.monthlyRecurringCharges || []).reduce((total, charge) => {
                           return total + (Number(charge.amount) || 0)
                         }, 0)
 
                         // Total calculations
-                        const totalOneTimeCharges = oneTimeMaintenance + customOneTimeCharges
+                        const refundableDeposits = securityDeposit + customRefundableOneTime
+                        const totalOneTimeCharges = oneTimeMaintenance + customNonRefundableOneTime
                         const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
                         const monthlyTotal = baseRent + recurringCharges
 
@@ -812,7 +840,7 @@ export default function TenantActivatePage() {
                         const numberOfInstallments = Number(agreement.planSnapshot.paymentModel?.installments) || 1
                         const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
                         const installmentAmount = monthlyTotal * monthsPerInstallment
-                        const activationTotal = installmentAmount + securityDeposit + totalOneTimeCharges
+                        const activationTotal = installmentAmount + refundableDeposits + totalOneTimeCharges
 
                         return (
                           <>
@@ -822,7 +850,7 @@ export default function TenantActivatePage() {
                             </div>
                             <div className="flex justify-between">
                               <span>Refundable Deposits</span>
-                              <span>₹{securityDeposit.toLocaleString()}</span>
+                              <span>₹{refundableDeposits.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>One-time Charges</span>

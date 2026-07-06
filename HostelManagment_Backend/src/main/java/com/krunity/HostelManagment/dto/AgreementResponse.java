@@ -26,6 +26,7 @@ public class AgreementResponse {
     private List<String> facilities;
     private Boolean parkingAllowed;
     private LocalDate startDate;
+    private LocalDate endDate;
     private String qrToken;
     private Instant qrExpiry;
     private Boolean qrUsed;

@@ -17,34 +17,42 @@ export default function BillingPreviewSection({ form, planId = null }) {
     const water = Number(form.charges?.utilityCharges?.water?.monthlyAmount) || 0
     const deepCleaning = Number(form.charges?.cleaningCharges?.deepCleaningOnExit?.amount) || 0
 
-    // Calculate custom one-time charges
-    const customOneTimeCharges = (form.charges?.customCharges?.oneTimeCharges || []).reduce((total, charge) => {
+    // Custom one-time charges (stored top-level on the form), split by refundability
+    const oneTimeCharges = form.oneTimeCharges || []
+    const customRefundableOneTime = oneTimeCharges
+      .filter(c => c.refundable)
+      .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+    const customNonRefundableOneTime = oneTimeCharges
+      .filter(c => !c.refundable)
+      .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+
+    // Calculate custom monthly recurring charges (stored top-level on the form)
+    const customMonthlyRecurringCharges = (form.monthlyRecurringCharges || []).reduce((total, charge) => {
       return total + (Number(charge.amount) || 0)
     }, 0)
 
-    // Calculate custom monthly recurring charges
-    const customMonthlyRecurringCharges = (form.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
-      return total + (Number(charge.amount) || 0)
-    }, 0)
-
-    // Total one-time charges = maintenance + custom charges
-    const totalOneTimeCharges = oneTimeMaintenance + customOneTimeCharges
+    // Refundable deposits = security deposit + custom refundable one-time charges
+    const refundableDeposits = securityDeposit + customRefundableOneTime
+    // Total one-time charges = maintenance + custom non-refundable charges
+    const totalOneTimeCharges = oneTimeMaintenance + customNonRefundableOneTime
 
     const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
     const monthlyTotal = baseRent + recurringCharges
 
     // Calculate installment details
-    const totalDuration = Number(form.duration?.value) || 12
-    const numberOfInstallments = Number(form.paymentModel?.installments) || 1
-    const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
+    const isNotFixed = form.duration?.durationType === 'NOT_FIXED'
+    const totalDuration = isNotFixed ? null : (Number(form.duration?.value) || 12)
+    const minStay = Number(form.duration?.minimumStayMonths) || 1
+    const numberOfInstallments = isNotFixed ? minStay : (Number(form.paymentModel?.installments) || 1)
+    const monthsPerInstallment = isNotFixed ? 1 : Math.ceil(totalDuration / numberOfInstallments)
     const installmentAmount = monthlyTotal * monthsPerInstallment
 
-    const activationTotal = installmentAmount + securityDeposit + totalOneTimeCharges
+    const activationTotal = installmentAmount + refundableDeposits + totalOneTimeCharges
 
     const preview = {
       activationAmount: {
         firstInstallment: installmentAmount,
-        refundableDeposits: securityDeposit,
+        refundableDeposits: refundableDeposits,
         oneTimeCharges: totalOneTimeCharges,
         totalActivationAmount: activationTotal
       },
@@ -54,15 +62,17 @@ export default function BillingPreviewSection({ form, planId = null }) {
         totalMonthlyAmount: monthlyTotal
       },
       installmentDetails: {
+        isNotFixed,
         installmentAmount: installmentAmount,
         monthsPerInstallment: monthsPerInstallment,
         numberOfInstallments: numberOfInstallments,
-        totalDuration: totalDuration
+        totalDuration: totalDuration,
+        minStay,
       },
       exitSettlement: {
-        estimatedRefund: securityDeposit,
+        estimatedRefund: refundableDeposits,
         potentialDeductions: deepCleaning,
-        netRefundEstimate: securityDeposit - deepCleaning
+        netRefundEstimate: refundableDeposits - deepCleaning
       }
     }
 
@@ -80,10 +90,12 @@ export default function BillingPreviewSection({ form, planId = null }) {
     form.charges?.utilityCharges?.electricity?.fixedAmount,
     form.charges?.utilityCharges?.water?.monthlyAmount,
     form.charges?.cleaningCharges?.deepCleaningOnExit?.amount,
-    form.charges?.customCharges?.oneTimeCharges, // Add custom one-time charges to dependencies
-    form.charges?.customCharges?.monthlyRecurringCharges, // Add custom monthly recurring charges to dependencies
-    form.duration?.value, // Add duration to dependencies
-    form.paymentModel?.installments // Add installments to dependencies
+    form.oneTimeCharges, // Add custom one-time charges to dependencies
+    form.monthlyRecurringCharges, // Add custom monthly recurring charges to dependencies
+    form.duration?.value,
+    form.duration?.durationType,
+    form.duration?.minimumStayMonths,
+    form.paymentModel?.installments
   ])
 
   const formatCurrency = (amount) => `₹${amount?.toLocaleString() || 0}`
@@ -125,8 +137,9 @@ export default function BillingPreviewSection({ form, planId = null }) {
               <span className="font-semibold text-slate-900">{formatCurrency(billingBreakdown.activationAmount.oneTimeCharges)}</span>
             </div>
             
-            {/* Show breakdown of one-time charges if there are custom charges */}
-            {form.charges?.customCharges?.oneTimeCharges && form.charges.customCharges.oneTimeCharges.length > 0 && (
+            {/* Breakdown of non-refundable one-time charges */}
+            {(Number(form.charges?.maintenanceCharges?.oneTimeMaintenanceCharge?.amount) > 0 ||
+              (form.oneTimeCharges || []).some(c => !c.refundable)) && (
               <div className="ml-4 space-y-1 text-xs text-slate-500">
                 {Number(form.charges?.maintenanceCharges?.oneTimeMaintenanceCharge?.amount) > 0 && (
                   <div className="flex justify-between">
@@ -134,7 +147,7 @@ export default function BillingPreviewSection({ form, planId = null }) {
                     <span>{formatCurrency(Number(form.charges.maintenanceCharges.oneTimeMaintenanceCharge.amount))}</span>
                   </div>
                 )}
-                {form.charges.customCharges.oneTimeCharges.map((charge, index) => (
+                {(form.oneTimeCharges || []).filter(c => !c.refundable).map((charge, index) => (
                   <div key={index} className="flex justify-between">
                     <span>• {charge.chargeName}:</span>
                     <span>{formatCurrency(Number(charge.amount))}</span>
@@ -142,7 +155,25 @@ export default function BillingPreviewSection({ form, planId = null }) {
                 ))}
               </div>
             )}
-            
+
+            {/* Breakdown of refundable deposits */}
+            {(form.oneTimeCharges || []).some(c => c.refundable) && (
+              <div className="ml-4 space-y-1 text-xs text-slate-500">
+                {Number(form.charges?.securityDeposit?.amount) > 0 && (
+                  <div className="flex justify-between">
+                    <span>• Security Deposit:</span>
+                    <span>{formatCurrency(Number(form.charges.securityDeposit.amount))}</span>
+                  </div>
+                )}
+                {(form.oneTimeCharges || []).filter(c => c.refundable).map((charge, index) => (
+                  <div key={index} className="flex justify-between">
+                    <span>• {charge.chargeName}:</span>
+                    <span>{formatCurrency(Number(charge.amount))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="border-t border-slate-200 pt-2 flex justify-between">
               <span className="font-semibold text-slate-900">Total Activation:</span>
               <span className="font-bold text-blue-700">{formatCurrency(billingBreakdown.activationAmount.totalActivationAmount)}</span>
@@ -164,7 +195,7 @@ export default function BillingPreviewSection({ form, planId = null }) {
             </div>
             
             {/* Show breakdown of recurring charges if there are custom charges */}
-            {form.charges?.customCharges?.monthlyRecurringCharges && form.charges.customCharges.monthlyRecurringCharges.length > 0 && (
+            {form.monthlyRecurringCharges && form.monthlyRecurringCharges.length > 0 && (
               <div className="ml-4 space-y-1 text-xs text-slate-500">
                 {Number(form.charges?.cleaningCharges?.monthlyCleaningCharge?.amount) > 0 && (
                   <div className="flex justify-between">
@@ -190,7 +221,7 @@ export default function BillingPreviewSection({ form, planId = null }) {
                     <span>{formatCurrency(Number(form.charges.utilityCharges.water.monthlyAmount))}</span>
                   </div>
                 )}
-                {form.charges.customCharges.monthlyRecurringCharges.map((charge, index) => (
+                {form.monthlyRecurringCharges.map((charge, index) => (
                   <div key={index} className="flex justify-between">
                     <span>• {charge.chargeName}:</span>
                     <span>{formatCurrency(Number(charge.amount))}</span>
@@ -224,7 +255,10 @@ export default function BillingPreviewSection({ form, planId = null }) {
                 <span className="font-bold text-orange-700 text-lg">{formatCurrency(billingBreakdown.installmentDetails.installmentAmount)}</span>
               </div>
               <div className="bg-orange-50 rounded-lg px-2 py-1 text-xs text-orange-700">
-                <strong>Payment Schedule:</strong> {billingBreakdown.installmentDetails.numberOfInstallments} installments of {formatCurrency(billingBreakdown.installmentDetails.installmentAmount)} each, covering {billingBreakdown.installmentDetails.totalDuration} months total
+                {billingBreakdown.installmentDetails.isNotFixed
+                  ? <><strong>Monthly rolling:</strong> {formatCurrency(billingBreakdown.installmentDetails.installmentAmount)}/month · Minimum stay {billingBreakdown.installmentDetails.minStay} month(s) · Continues month-to-month after that</>
+                  : <><strong>Payment Schedule:</strong> {billingBreakdown.installmentDetails.numberOfInstallments} installments of {formatCurrency(billingBreakdown.installmentDetails.installmentAmount)} each, covering {billingBreakdown.installmentDetails.totalDuration} months total</>
+                }
               </div>
             </div>
           </div>

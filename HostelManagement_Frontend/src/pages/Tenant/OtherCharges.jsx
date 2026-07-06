@@ -125,15 +125,25 @@ export default function TenantOtherCharges() {
     return <Badge color={config.color}>{config.text}</Badge>
   }
 
+  // The current tenant's own share of a room (split) charge, if present.
+  const getMyShare = (charge) =>
+    charge.category === 'OTHER_CHARGE_ROOM' && Array.isArray(charge.roomTenants)
+      ? charge.roomTenants.find((t) => t.currentTenant)
+      : null
+
   const getTenantAmount = (charge) => {
-    if (charge.category === 'OTHER_CHARGE_ROOM' && charge.roomTenants) {
+    const mine = getMyShare(charge)
+    if (mine) return mine.splitAmount
+    if (charge.category === 'OTHER_CHARGE_ROOM' && charge.roomTenants?.length) {
       return charge.amount / charge.roomTenants.length
     }
     return charge.amount
   }
 
   const getTenantRemainingAmount = (charge) => {
-    if (charge.category === 'OTHER_CHARGE_ROOM' && charge.roomTenants) {
+    const mine = getMyShare(charge)
+    if (mine) return mine.paymentStatus === 'COMPLETED' ? 0 : mine.splitAmount
+    if (charge.category === 'OTHER_CHARGE_ROOM' && charge.roomTenants?.length) {
       const tenantShare = charge.amount / charge.roomTenants.length
       const paidShare = (charge.paidAmount || 0) / charge.roomTenants.length
       return tenantShare - paidShare

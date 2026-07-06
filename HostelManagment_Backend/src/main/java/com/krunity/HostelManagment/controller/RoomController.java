@@ -1,14 +1,20 @@
 package com.krunity.HostelManagment.controller;
 
+import com.krunity.HostelManagment.Utils.ApplicationContext;
 import com.krunity.HostelManagment.dto.CreateRoomRequest;
 import com.krunity.HostelManagment.dto.RoomResponse;
 import com.krunity.HostelManagment.dto.RoomTenantResponse;
 import com.krunity.HostelManagment.exception.NotFoundException;
+import com.krunity.HostelManagment.model.RoomAllotment;
+import com.krunity.HostelManagment.model.User;
+import com.krunity.HostelManagment.service.AllotmentService;
 import com.krunity.HostelManagment.service.RoomService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/hostels/{hostelId}/{floorId}/rooms")
@@ -17,7 +23,10 @@ public class RoomController {
     //CURD operations for Rooms
 
     private final RoomService roomService;
-    public RoomController(RoomService roomService) {
+    private final AllotmentService allotmentService;
+
+    public RoomController(RoomService roomService, AllotmentService allotmentService) {
+        this.allotmentService = allotmentService;
         this.roomService = roomService;
     }
 
@@ -97,5 +106,14 @@ public class RoomController {
         } catch (Exception e){
             return ResponseEntity.status(500).body("Error getting tenants from room: " + e.getMessage());
         }
+    }
+
+    @PostMapping("/{roomId}/allotments/{allotmentId}/activate")
+    public ResponseEntity<?> activateAllotment(@PathVariable String roomId, @PathVariable UUID allotmentId) {
+        RoomAllotment allotment = allotmentService.markArrivalByOwner(allotmentId);
+        return ResponseEntity.ok(Map.of(
+                "allotmentId", allotment.getAllotmentId(),
+                "status", allotment.getRoomAllotmentStatus()
+        ));
     }
 }

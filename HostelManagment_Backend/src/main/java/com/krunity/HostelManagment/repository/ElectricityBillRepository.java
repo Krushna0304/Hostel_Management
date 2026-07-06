@@ -15,9 +15,7 @@ import java.util.UUID;
 public interface ElectricityBillRepository extends JpaRepository<ElectricityBill, UUID> {
     
     List<ElectricityBill> findByOwnerIdOrderByBillYearDescBillMonthDesc(UUID ownerId);
-    
-    List<ElectricityBill> findByTenantIdOrderByBillYearDescBillMonthDesc(UUID tenantId);
-    
+
     List<ElectricityBill> findByOwnerIdAndBillMonthAndBillYear(UUID ownerId, Integer billMonth, Integer billYear);
     
     Optional<ElectricityBill> findByAccountIdAndBillMonthAndBillYear(UUID accountId, Integer billMonth, Integer billYear);
@@ -31,14 +29,6 @@ public interface ElectricityBillRepository extends JpaRepository<ElectricityBill
            "WHERE eb.ownerId = :ownerId " +
            "ORDER BY eb.billYear DESC, eb.billMonth DESC")
     List<ElectricityBill> findByOwnerIdWithAccountAndRoomDetails(@Param("ownerId") UUID ownerId);
-    
-    @Query("SELECT eb FROM ElectricityBill eb " +
-           "JOIN FETCH eb.electricityAccount ea " +
-           "JOIN FETCH ea.room r " +
-           "JOIN FETCH r.hostel " +
-           "WHERE eb.tenantId = :tenantId " +
-           "ORDER BY eb.billYear DESC, eb.billMonth DESC")
-    List<ElectricityBill> findByTenantIdWithAccountAndRoomDetails(@Param("tenantId") UUID tenantId);
 
     @Query("SELECT COALESCE(SUM(eb.remainingAmount), 0) FROM ElectricityBill eb WHERE eb.accountId = :accountId")
     java.math.BigDecimal sumRemainingAmountByAccountId(@Param("accountId") UUID accountId);

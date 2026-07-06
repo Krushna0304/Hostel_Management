@@ -16,6 +16,7 @@ const Rooms = lazy(() => import('./pages/Owner/Rooms'))
 const CreateRoomPage = lazy(() => import('./pages/Owner/CreateRoomPage'))
 const AgreementsLayout = lazy(() => import('./pages/Owner/Agreements/AgreementsLayout'))
 const Plans = lazy(() => import('./pages/Owner/Plans'))
+const CreatePlanPage = lazy(() => import('./pages/Owner/CreatePlanPage'))
 const PaymentSettings = lazy(() => import('./pages/Owner/PaymentSettings'))
 const OwnerOtherCharges = lazy(() => import('./pages/Owner/OtherCharges'))
 const OwnerElectricityBills = lazy(() => import('./pages/Owner/ElectricityBills'))
@@ -60,6 +61,8 @@ function App() {
               <Route path="hostels/:hostelId/floors/:floorId/add-room" element={<CreateRoomPage />} />
               <Route path="agreements/*" element={<AgreementsLayout />} />
               <Route path="plans" element={<Plans />} />
+              <Route path="plans/create" element={<CreatePlanPage />} />
+              <Route path="plans/edit" element={<CreatePlanPage />} />
               <Route path="collections" element={<CollectionDashboard />} />
               <Route path="other-charges" element={<OwnerOtherCharges />} />
               <Route path="electricity-bills" element={<OwnerElectricityBills />} />

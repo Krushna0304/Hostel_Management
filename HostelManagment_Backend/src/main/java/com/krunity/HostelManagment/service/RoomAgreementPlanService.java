@@ -137,13 +137,16 @@ public class RoomAgreementPlanService {
             throw new IllegalStateException("Cannot edit plan that is currently in use by agreements");
         }
 
+        // Process charges and merge custom charges from root level
+        Charges charges = processCharges(request);
+
         // Update plan fields
         plan.setPlanName(request.getPlanName());
         plan.setPlanType(request.getPlanType().name());
         plan.setRentDetails(request.getRentDetails());
         plan.setDuration(request.getDuration());
         plan.setPaymentModel(request.getPaymentModel());
-        plan.setCharges(request.getCharges());
+        plan.setCharges(charges);
         plan.setFreeFacilities(request.getFreeFacilities());
         plan.setLatePaymentPolicy(request.getLatePaymentPolicy());
         plan.setRulesAndRegulations(request.getRulesAndRegulations());
@@ -172,6 +175,9 @@ public class RoomAgreementPlanService {
     public PlanResponse createPlan(CreatePlanRequest request) {
         User owner = ApplicationContext.getUser();
 
+        // Process charges and merge custom charges from root level
+        Charges charges = processCharges(request);
+
         RoomAgreementPlan plan = RoomAgreementPlan.builder()
                 .planName(request.getPlanName())
                 .planType(request.getPlanType().name())
@@ -182,7 +188,7 @@ public class RoomAgreementPlanService {
                 .rentDetails(request.getRentDetails())
                 .duration(request.getDuration())
                 .paymentModel(request.getPaymentModel())
-                .charges(request.getCharges())
+                .charges(charges)
                 .freeFacilities(request.getFreeFacilities())
                 .latePaymentPolicy(request.getLatePaymentPolicy())
                 .rulesAndRegulations(request.getRulesAndRegulations())
@@ -201,6 +207,36 @@ public class RoomAgreementPlanService {
 
         RoomAgreementPlan saved = planRepository.save(plan);
         return RoomAgreementPlanMapper.toDto(saved);
+    }
+
+    /**
+     * Process charges and merge custom charges from root level fields
+     */
+    private Charges processCharges(CreatePlanRequest request) {
+        Charges charges = request.getCharges();
+        if (charges == null) {
+            charges = new Charges();
+        }
+
+        // Handle custom charges from root level fields (for backward compatibility)
+        if (request.getOneTimeCharges() != null || request.getMonthlyRecurringCharges() != null) {
+            Charges.CustomCharges customCharges = charges.getCustomCharges();
+            if (customCharges == null) {
+                customCharges = new Charges.CustomCharges();
+            }
+
+            // Merge root level charges with existing custom charges
+            if (request.getOneTimeCharges() != null) {
+                customCharges.setOneTimeCharges(request.getOneTimeCharges());
+            }
+            if (request.getMonthlyRecurringCharges() != null) {
+                customCharges.setMonthlyRecurringCharges(request.getMonthlyRecurringCharges());
+            }
+
+            charges.setCustomCharges(customCharges);
+        }
+
+        return charges;
     }
 
     /**

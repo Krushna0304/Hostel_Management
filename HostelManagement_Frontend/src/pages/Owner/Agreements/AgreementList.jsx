@@ -141,17 +141,22 @@ function AgreementDetailModal({ agreement, onClose }) {
                   const water = Number(plan.charges?.utilityCharges?.water?.monthlyAmount) || 0
                   const deepCleaning = Number(plan.charges?.cleaningCharges?.deepCleaningOnExit?.amount) || 0
 
-                  // Calculate custom charges
-                  const customOneTimeCharges = (plan.charges?.customCharges?.oneTimeCharges || []).reduce((total, charge) => {
-                    return total + (Number(charge.amount) || 0)
-                  }, 0)
+                  // Custom one-time charges (fall back to top-level for backward compatibility), split by refundability
+                  const customOneTime = plan.charges?.customCharges?.oneTimeCharges || plan.oneTimeCharges || []
+                  const customRefundableOneTime = customOneTime
+                    .filter(c => c.refundable)
+                    .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
+                  const customNonRefundableOneTime = customOneTime
+                    .filter(c => !c.refundable)
+                    .reduce((total, charge) => total + (Number(charge.amount) || 0), 0)
 
-                  const customMonthlyRecurringCharges = (plan.charges?.customCharges?.monthlyRecurringCharges || []).reduce((total, charge) => {
+                  const customMonthlyRecurringCharges = (plan.charges?.customCharges?.monthlyRecurringCharges || plan.monthlyRecurringCharges || []).reduce((total, charge) => {
                     return total + (Number(charge.amount) || 0)
                   }, 0)
 
                   // Total calculations
-                  const totalOneTimeCharges = oneTimeMaintenance + customOneTimeCharges
+                  const refundableDeposits = securityDeposit + customRefundableOneTime
+                  const totalOneTimeCharges = oneTimeMaintenance + customNonRefundableOneTime
                   const recurringCharges = monthlyCleaning + monthlyMaintenance + electricity + water + customMonthlyRecurringCharges
                   const monthlyTotal = baseRent + recurringCharges
 
@@ -160,7 +165,7 @@ function AgreementDetailModal({ agreement, onClose }) {
                   const numberOfInstallments = Number(plan.paymentModel?.installments) || 1
                   const monthsPerInstallment = Math.ceil(totalDuration / numberOfInstallments)
                   const installmentAmount = monthlyTotal * monthsPerInstallment
-                  const activationTotal = installmentAmount + securityDeposit + totalOneTimeCharges
+                  const activationTotal = installmentAmount + refundableDeposits + totalOneTimeCharges
 
                   return (
                     <div className="space-y-3">
@@ -174,15 +179,15 @@ function AgreementDetailModal({ agreement, onClose }) {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">Refundable Deposits:</span>
-                            <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                            <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">One-time Charges:</span>
                             <span className="font-semibold text-blue-900">₹{totalOneTimeCharges.toLocaleString()}</span>
                           </div>
-                          
-                          {/* Show breakdown of one-time charges */}
-                          {(totalOneTimeCharges > 0) && (
+
+                          {/* Breakdown of non-refundable one-time charges */}
+                          {(oneTimeMaintenance > 0 || customOneTime.some(c => !c.refundable)) && (
                             <div className="ml-4 space-y-1 text-xs text-blue-600">
                               {oneTimeMaintenance > 0 && (
                                 <div className="flex justify-between">
@@ -190,7 +195,7 @@ function AgreementDetailModal({ agreement, onClose }) {
                                   <span>₹{oneTimeMaintenance.toLocaleString()}</span>
                                 </div>
                               )}
-                              {plan.charges?.customCharges?.oneTimeCharges && plan.charges.customCharges.oneTimeCharges.map((charge, index) => (
+                              {customOneTime.filter(c => !c.refundable).map((charge, index) => (
                                 <div key={index} className="flex justify-between">
                                   <span>• {charge.chargeName}:</span>
                                   <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -198,7 +203,25 @@ function AgreementDetailModal({ agreement, onClose }) {
                               ))}
                             </div>
                           )}
-                          
+
+                          {/* Breakdown of refundable deposits */}
+                          {customOneTime.some(c => c.refundable) && (
+                            <div className="ml-4 space-y-1 text-xs text-blue-600">
+                              {securityDeposit > 0 && (
+                                <div className="flex justify-between">
+                                  <span>• Security Deposit:</span>
+                                  <span>₹{securityDeposit.toLocaleString()}</span>
+                                </div>
+                              )}
+                              {customOneTime.filter(c => c.refundable).map((charge, index) => (
+                                <div key={index} className="flex justify-between">
+                                  <span>• {charge.chargeName}:</span>
+                                  <span>₹{Number(charge.amount).toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           <div className="border-t border-blue-200 pt-2 flex justify-between">
                             <span className="font-semibold text-blue-900">Total Activation:</span>
                             <span className="font-bold text-blue-700">₹{activationTotal.toLocaleString()}</span>
@@ -246,7 +269,7 @@ function AgreementDetailModal({ agreement, onClose }) {
                                   <span>₹{water.toLocaleString()}</span>
                                 </div>
                               )}
-                              {plan.charges?.customCharges?.monthlyRecurringCharges && plan.charges.customCharges.monthlyRecurringCharges.map((charge, index) => (
+                              {(plan.charges?.customCharges?.monthlyRecurringCharges || plan.monthlyRecurringCharges || []).map((charge, index) => (
                                 <div key={index} className="flex justify-between">
                                   <span>• {charge.chargeName}:</span>
                                   <span>₹{Number(charge.amount).toLocaleString()}</span>
@@ -292,7 +315,7 @@ function AgreementDetailModal({ agreement, onClose }) {
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-slate-600">Refundable Amount:</span>
-                            <span className="font-semibold text-green-700">₹{securityDeposit.toLocaleString()}</span>
+                            <span className="font-semibold text-green-700">₹{refundableDeposits.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-600">Potential Deductions:</span>
@@ -300,7 +323,7 @@ function AgreementDetailModal({ agreement, onClose }) {
                           </div>
                           <div className="border-t border-slate-200 pt-2 flex justify-between">
                             <span className="font-semibold text-slate-900">Net Refund Estimate:</span>
-                            <span className="font-bold text-blue-700">₹{(securityDeposit - deepCleaning).toLocaleString()}</span>
+                            <span className="font-bold text-blue-700">₹{(refundableDeposits - deepCleaning).toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
@@ -508,7 +531,17 @@ function AgreementDetailModal({ agreement, onClose }) {
           {agreement.status === 'PENDING_TENANT_ACTION' && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-semibold">Awaiting tenant action</p>
-              <p className="mt-1 break-all text-xs">QR token: {agreement.qrToken}</p>
+              <p className="mt-1 break-all text-xs">
+                Activation URL:{' '}
+                <a
+                  href={`${window.location.origin}/tenant/activate?token=${agreement.qrToken}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-amber-900 hover:text-amber-700"
+                >
+                  {`${window.location.origin}/tenant/activate?token=${agreement.qrToken}`}
+                </a>
+              </p>
               <p className="mt-1">Expires: {formatDate(agreement.qrExpiry)}</p>
             </div>
           )}
@@ -595,7 +628,7 @@ export default function AgreementList() {
     )
   }
 
-  if (!loading && agreements.length === 0) {
+  if (!loading && !error && agreements.length === 0) {
     return (
       <EmptyState
         icon={<ClipboardIcon className="h-5 w-5" />}
@@ -723,7 +756,17 @@ export default function AgreementList() {
                     {agreement.status === 'PENDING_TENANT_ACTION' && (
                       <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                         <p className="font-semibold">Awaiting tenant action</p>
-                        <p className="mt-1 break-all">QR token: {agreement.qrToken}</p>
+                        <p className="mt-1 break-all">
+                          Activation URL:{' '}
+                          <a
+                            href={`${window.location.origin}/tenant/activate?token=${agreement.qrToken}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-amber-900 hover:text-amber-700"
+                          >
+                            {`${window.location.origin}/tenant/activate?token=${agreement.qrToken}`}
+                          </a>
+                        </p>
                         <p className="mt-1">Expires: {formatDate(agreement.qrExpiry)}</p>
                       </div>
                     )}

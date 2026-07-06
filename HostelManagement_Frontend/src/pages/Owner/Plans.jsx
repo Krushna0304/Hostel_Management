@@ -1,22 +1,19 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { planService } from '../../services/agreementService'
 import { Alert, Badge, Button, Card, CardContent, CardHeader, ConfirmationModal, EmptyState, PageHeader, Skeleton } from '../../components/ui'
-import CreatePlanModal from './CreatePlanModal'
 import PlanDetailsModal from '../../components/PlanDetailsModal'
 
 export default function Plans() {
+  const navigate = useNavigate()
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showModal, setShowModal] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [activatingId, setActivatingId] = useState(null)
   const [deactivatingId, setDeactivatingId] = useState(null)
   const [selectedPlan, setSelectedPlan] = useState(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [editingPlan, setEditingPlan] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
   
   // Confirmation modal states
@@ -165,19 +162,6 @@ export default function Plans() {
     )
   }
 
-  const handleCreated = (newPlan) => {
-    setPlans(prev => {
-      const updatedPlans = [newPlan, ...prev]
-      // Re-sort to maintain order
-      return updatedPlans.sort((a, b) => {
-        const dateA = new Date(a.audit?.updatedAt || a.audit?.createdAt || 0)
-        const dateB = new Date(b.audit?.updatedAt || b.audit?.createdAt || 0)
-        return dateB - dateA
-      })
-    })
-    setShowModal(false)
-  }
-
   const handleViewPlan = (plan) => {
     console.log('handleViewPlan called with plan:', plan)
     console.log('Setting selectedPlan to:', plan)
@@ -193,27 +177,7 @@ export default function Plans() {
   }
 
   const handleEditPlan = (plan) => {
-    setEditingPlan(plan)
-    setShowEditModal(true)
-  }
-
-  const handleCloseEditModal = () => {
-    setShowEditModal(false)
-    setEditingPlan(null)
-  }
-
-  const handlePlanUpdated = (updatedPlan) => {
-    setPlans(prev => {
-      const updatedPlans = prev.map(p => p.id === updatedPlan.id ? updatedPlan : p)
-      // Re-sort to maintain order after update
-      return updatedPlans.sort((a, b) => {
-        const dateA = new Date(a.audit?.updatedAt || a.audit?.createdAt || 0)
-        const dateB = new Date(b.audit?.updatedAt || b.audit?.createdAt || 0)
-        return dateB - dateA
-      })
-    })
-    setShowEditModal(false)
-    setEditingPlan(null)
+    navigate('/owner/plans/edit', { state: { plan } })
   }
 
   if (loading) {
@@ -226,27 +190,10 @@ export default function Plans() {
 
   return (
     <div className="space-y-8">
-      {showModal && (
-        <CreatePlanModal onClose={() => setShowModal(false)} onCreated={handleCreated} />
-      )}
-
-      {showEditModal && editingPlan && (
-        <CreatePlanModal 
-          onClose={handleCloseEditModal} 
-          onCreated={handlePlanUpdated}
-          editMode={true}
-          planToEdit={editingPlan}
-        />
-      )}
-
       {showDetailsModal && selectedPlan && (
-        <>
-          {console.log('Rendering PlanDetailsModal with:', { showDetailsModal, selectedPlan })}
-          <PlanDetailsModal plan={selectedPlan} onClose={handleCloseDetailsModal} />
-        </>
+        <PlanDetailsModal plan={selectedPlan} onClose={handleCloseDetailsModal} />
       )}
 
-      {/* Custom Confirmation Modal */}
       <ConfirmationModal
         isOpen={showConfirmModal}
         onClose={handleCancelAction}
@@ -261,7 +208,7 @@ export default function Plans() {
         eyebrow="Owner workspace"
         title="Tenant plans"
         description="Create and manage custom rent plans. Plans you create are visible only to you."
-        action={<Button label="Create plan" onClick={() => setShowModal(true)} />}
+        action={<Button label="Create plan" onClick={() => navigate('/owner/plans/create')} />}
       />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
@@ -271,7 +218,7 @@ export default function Plans() {
           title="No custom plans yet"
           description="Create your first plan to use it when setting up tenant agreements."
           actionLabel="Create plan"
-          onAction={() => setShowModal(true)}
+          onAction={() => navigate('/owner/plans/create')}
         />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">

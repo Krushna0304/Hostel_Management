@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Duration {
+    private String durationType; // FIXED | NOT_FIXED
     private String unit; // MONTH, YEAR
     private Integer value;
     private Integer minimumStayMonths;

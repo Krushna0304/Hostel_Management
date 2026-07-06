@@ -23,6 +23,9 @@ public class CreateRoomAgreementRequest {
     @FutureOrPresent(message = "Start date must be today or in the future")
     private LocalDate startDate;
 
+    @FutureOrPresent(message = "End date must be today or in the future")
+    private LocalDate endDate;
+
     // Legacy fields - kept for backward compatibility but deprecated
     @Deprecated
     private BigDecimal rent;

@@ -39,6 +39,28 @@ class ElectricityBillService {
     return response.data
   }
 
+  // Sends a single OTP covering all of the tenant's outstanding bills (pay all, cash)
+  async sendPayAllOtp() {
+    const response = await apiClient.post('/api/electricity/payments/pay-all-otp')
+    return response.data
+  }
+
+  // Owner Collections
+  async getOwnerCollections() {
+    const response = await apiClient.get('/api/electricity/collections/owner')
+    return response.data
+  }
+
+  async getTenantElectricityHistory(tenantId) {
+    const response = await apiClient.get(`/api/electricity/collections/history/${tenantId}`)
+    return response.data
+  }
+
+  async collectTenantElectricity(tenantId) {
+    const response = await apiClient.post(`/api/electricity/collections/collect/${tenantId}`)
+    return response.data
+  }
+
   // Utility methods
   formatCurrency(amount) {
     return `₹${Number(amount).toLocaleString()}`
@@ -59,6 +81,7 @@ class ElectricityBillService {
       case 'PARTIAL':
         return 'bg-orange-100 text-orange-800 border-orange-200'
       case 'PAID':
+      case 'COMPLETED':
         return 'bg-green-100 text-green-800 border-green-200'
       case 'OVERDUE':
         return 'bg-red-100 text-red-800 border-red-200'
@@ -74,6 +97,7 @@ class ElectricityBillService {
       case 'PARTIAL':
         return '⚡'
       case 'PAID':
+      case 'COMPLETED':
         return '✅'
       case 'OVERDUE':
         return '🚨'

@@ -5,9 +5,11 @@ import com.krunity.HostelManagment.dto.SettlementCalculationDto;
 import com.krunity.HostelManagment.dto.SettlementRequestDto;
 import com.krunity.HostelManagment.dto.SettlementResponseDto;
 import com.krunity.HostelManagment.model.Agreement;
+import com.krunity.HostelManagment.model.RoomAllotment;
 import com.krunity.HostelManagment.model.SettlementRequest;
 import com.krunity.HostelManagment.model.User;
 import com.krunity.HostelManagment.repository.AgreementRepository;
+import com.krunity.HostelManagment.service.AllotmentService;
 import com.krunity.HostelManagment.service.SettlementService;
 import com.krunity.HostelManagment.Utils.ApplicationContext;
 import jakarta.validation.Valid;
@@ -27,6 +29,9 @@ public class SettlementController {
 
     @Autowired
     private SettlementService settlementService;
+
+    @Autowired
+    private AllotmentService allotmentService;
 
     @Autowired
     private AgreementRepository agreementRepository;
@@ -129,6 +134,23 @@ public class SettlementController {
             log.error("Error completing settlement: ", e);
             throw e;
         }
+    }
+
+    /**
+     * POST /api/settlements/allotments/{allotmentId}/confirm-left
+     * Owner confirms the tenant has physically vacated.
+     * LEFT is applied only when the tenant has also confirmed.
+     */
+    @PostMapping("/allotments/{allotmentId}/confirm-left")
+    public ResponseEntity<?> ownerConfirmLeft(@PathVariable UUID allotmentId) {
+        User owner = ApplicationContext.getUser();
+        RoomAllotment allotment = allotmentService.markOwnerLeft(allotmentId, owner.getUserId());
+        return ResponseEntity.ok(Map.of(
+                "allotmentId", allotment.getAllotmentId(),
+                "status", allotment.getRoomAllotmentStatus(),
+                "tenantMarkedLeft", allotment.isTenantMarkedLeft(),
+                "ownerMarkedLeft", allotment.isOwnerMarkedLeft()
+        ));
     }
 
     @GetMapping("/owner")

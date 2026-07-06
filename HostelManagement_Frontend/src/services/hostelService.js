@@ -103,11 +103,21 @@ export const roomService = {
     return apiClient.get(`/hostels/${hostelId}/${floorId}/rooms/active${params}`)
   },
 
+  // Date-aware availability for agreement creation
+  getAvailableRooms: (floorId, startDate, endDate , roomType) => {
+    const params = new URLSearchParams({ floorId, startDate , endDate})
+    if (roomType) params.append('roomType', roomType)
+    return apiClient.get(`/api/rooms/available?${params.toString()}`)
+  },
+
   // Get tenants assigned to a room
   getRoomTenants: (hostelId, floorId, roomId) => {
     // Backend expects: /hostels/{hostelId}/{floorId}/rooms/{roomId}/tenants
     return apiClient.get(`/hostels/${hostelId}/${floorId}/rooms/${roomId}/tenants`);
   },
+
+  activateAllotment: (hostelId, floorId, roomId, allotmentId) =>
+    apiClient.post(`/hostels/${hostelId}/${floorId}/rooms/${roomId}/allotments/${allotmentId}/activate`),
 
   // Get, update, delete room by id (if needed)
   getRoomById: (hostelId, roomId) => apiClient.get(`/hostels/${hostelId}/rooms/${roomId}`),

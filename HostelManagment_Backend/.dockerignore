@@ -1,0 +1,6 @@
+target
+logs
+.git
+.idea
+.m2repo
+*.log

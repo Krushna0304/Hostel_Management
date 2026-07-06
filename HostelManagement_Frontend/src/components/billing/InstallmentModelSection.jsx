@@ -1,36 +1,24 @@
-import { useState, useEffect } from 'react'
-import { Field, Button, NumericInput } from '../ui'
-import { planService } from '../../services/agreementService'
+import { Field, NumericInput } from '../ui'
 
 const inputCls = "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
 const selectCls = inputCls
 
 export default function InstallmentModelSection({ form, set }) {
-  const [installmentPreview, setInstallmentPreview] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const isNotFixed = form.duration?.durationType === 'NOT_FIXED'
 
-  const calculateInstallmentPreview = async () => {
-    if (!form.duration?.value || !form.paymentModel?.installments) return
-
-    setLoading(true)
-    try {
-      const response = await planService.calculateInstallments({
-        totalMonths: form.duration.value,
-        numberOfInstallments: form.paymentModel.installments,
-        distributionStrategy: 'AUTO'
-      })
-      
-      setInstallmentPreview(response.data)
-    } catch (error) {
-      console.error('Failed to calculate installment preview:', error)
-    } finally {
-      setLoading(false)
+  const handleDurationTypeChange = (e) => {
+    const durationType = e.target.value
+    set('duration.durationType', durationType)
+    if (durationType === 'NOT_FIXED') {
+      // For not-fixed: installments is always 1 (monthly), value is irrelevant
+      set('paymentModel.installments', 1)
+      set('duration.value', 0)
+    } else {
+      // Restore sensible defaults for fixed
+      set('duration.value', 12)
+      set('paymentModel.installments', 3)
     }
   }
-
-  useEffect(() => {
-    calculateInstallmentPreview()
-  }, [form.duration?.value, form.paymentModel?.installments])
 
   return (
     <div className="rounded-2xl border border-slate-200">
@@ -39,56 +27,80 @@ export default function InstallmentModelSection({ form, set }) {
         <p className="text-xs text-slate-500 mt-1">Configure flexible installment distribution</p>
       </div>
       <div className="px-4 py-4 space-y-3">
-        {/* Duration */}
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Total Duration">
-            <NumericInput 
-              className={inputCls} 
-              value={form.duration?.value || ''} 
-              onChange={e => set('duration.value', Number(e.target.value))} 
-              placeholder="12"
-              min="1"
-              max="60"
-            />
-          </Field>
-          <Field label="Duration Unit">
-            <select 
-              className={selectCls} 
-              value={form.duration?.unit || 'MONTH'} 
-              onChange={e => set('duration.unit', e.target.value)}
-            >
-              <option value="MONTH">Months</option>
-              <option value="YEAR">Years</option>
-            </select>
-          </Field>
-          <Field label="Min Stay (months)">
-            <NumericInput 
-              className={inputCls} 
-              value={form.duration?.minimumStayMonths || ''} 
-              onChange={e => set('duration.minimumStayMonths', Number(e.target.value))} 
+
+        {/* Duration Type */}
+        <Field label="Duration Type">
+          <select
+            className={selectCls}
+            value={form.duration?.durationType || 'FIXED'}
+            onChange={handleDurationTypeChange}
+          >
+            <option value="FIXED">Fixed Duration</option>
+            <option value="NOT_FIXED">Not Fixed Duration (Monthly rolling)</option>
+          </select>
+        </Field>
+
+        {isNotFixed && (
+          <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+            Tenant pays month-to-month with no fixed end date. Installments covering the minimum stay are generated upfront; additional months continue rolling after that.
+          </div>
+        )}
+
+        {/* Duration fields — hidden for NOT_FIXED since no total duration applies */}
+        <div className={`grid gap-3 ${isNotFixed ? 'grid-cols-1' : 'grid-cols-3'}`}>
+          {!isNotFixed && (
+            <>
+              <Field label="Total Duration">
+                <NumericInput
+                  className={inputCls}
+                  value={form.duration?.value || ''}
+                  onChange={e => set('duration.value', Number(e.target.value))}
+                  placeholder="12"
+                  min="1"
+                  max="60"
+                />
+              </Field>
+              <Field label="Duration Unit">
+                <select
+                  className={selectCls}
+                  value={form.duration?.unit || 'MONTH'}
+                  onChange={e => set('duration.unit', e.target.value)}
+                >
+                  <option value="MONTH">Months</option>
+                </select>
+              </Field>
+            </>
+          )}
+          <Field label={isNotFixed ? 'Minimum Stay (months)' : 'Min Stay (months)'}>
+            <NumericInput
+              className={inputCls}
+              value={form.duration?.minimumStayMonths || ''}
+              onChange={e => set('duration.minimumStayMonths', Number(e.target.value))}
               placeholder="3"
               min="1"
-              max="12"
+              max="60"
             />
           </Field>
         </div>
 
         {/* Payment Model */}
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Number of Installments">
-            <NumericInput 
-              className={inputCls} 
-              value={form.paymentModel?.installments || ''} 
-              onChange={e => set('paymentModel.installments', Number(e.target.value))} 
-              placeholder="3"
-              min="1"
-              max="12"
-            />
-          </Field>
+        <div className={`grid gap-3 ${isNotFixed ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {!isNotFixed && (
+            <Field label="Number of Installments">
+              <NumericInput
+                className={inputCls}
+                value={form.paymentModel?.installments || ''}
+                onChange={e => set('paymentModel.installments', Number(e.target.value))}
+                placeholder="3"
+                min="1"
+                max="60"
+              />
+            </Field>
+          )}
           <Field label="Payment Timing">
-            <select 
-              className={selectCls} 
-              value={form.paymentModel?.paymentTiming || 'PREPAID'} 
+            <select
+              className={selectCls}
+              value={form.paymentModel?.paymentTiming || 'PREPAID'}
               onChange={e => set('paymentModel.paymentTiming', e.target.value)}
             >
               <option value="PREPAID">Prepaid</option>
@@ -96,10 +108,10 @@ export default function InstallmentModelSection({ form, set }) {
             </select>
           </Field>
           <Field label="Due Day of Month">
-            <NumericInput 
-              className={inputCls} 
-              value={form.paymentModel?.dueDayOfMonth || ''} 
-              onChange={e => set('paymentModel.dueDayOfMonth', Number(e.target.value))} 
+            <NumericInput
+              className={inputCls}
+              value={form.paymentModel?.dueDayOfMonth || ''}
+              onChange={e => set('paymentModel.dueDayOfMonth', Number(e.target.value))}
               placeholder="5"
               min="1"
               max="28"
@@ -107,33 +119,10 @@ export default function InstallmentModelSection({ form, set }) {
           </Field>
         </div>
 
-        {/* Installment Preview */}
-        {installmentPreview && (
-          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-            <p className="text-sm font-semibold text-green-900 mb-2">📋 Installment Distribution Preview</p>
-            <div className="space-y-2">
-              {installmentPreview.installmentGroups?.map((group, index) => (
-                <div key={index} className="flex justify-between items-center text-sm">
-                  <span className="text-green-800">
-                    Installment {group.installmentNumber}: {group.description}
-                  </span>
-                  <span className="text-green-700 font-medium">
-                    {group.monthCount} month{group.monthCount > 1 ? 's' : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-green-600 mt-2">
-              Strategy: {installmentPreview.distributionStrategy} | 
-              Total: {installmentPreview.totalMonths} months across {installmentPreview.numberOfInstallments} installments
-            </p>
-          </div>
-        )}
-
-        {loading && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-            <p className="text-sm text-slate-600">Calculating installment distribution...</p>
-          </div>
+        {isNotFixed && (
+          <p className="text-xs text-slate-400">
+            Monthly installments are generated automatically. Number of installments = 1 per month (fixed).
+          </p>
         )}
       </div>
     </div>
