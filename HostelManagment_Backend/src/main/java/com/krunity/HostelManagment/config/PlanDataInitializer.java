@@ -131,7 +131,6 @@ public class PlanDataInitializer implements CommandLineRunner {
         LatePaymentPenalty latePaymentPenalty = LatePaymentPenalty.builder()
                 .type("PER_DAY")
                 .amount(new BigDecimal("100"))
-                .maxAmount(new BigDecimal("2500"))
                 .build();
         
         LatePaymentPolicy latePaymentPolicy = LatePaymentPolicy.builder()

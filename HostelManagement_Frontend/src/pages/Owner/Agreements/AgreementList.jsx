@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import agreementService from '../../../services/agreementService'
 import { Alert, Badge, Button, Card, CardContent, CardHeader, EmptyState, Skeleton } from '../../../components/ui'
 import { ClipboardIcon } from '../../../components/icons/AppIcons'
+import SettlementTransactionModal from '../../../components/SettlementTransactionModal'
+import extensionService from '../../../services/extensionService'
+import ExtensionApprovalModal from '../../../components/ExtensionApprovalModal'
 
 function AgreementDetailModal({ agreement, onClose }) {
   if (!agreement) return null
@@ -357,8 +360,8 @@ function AgreementDetailModal({ agreement, onClose }) {
                         <p className="font-semibold text-slate-950">{plan.paymentModel.installments}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500">Due Day</p>
-                        <p className="font-semibold text-slate-950">Day {plan.paymentModel.dueDayOfMonth} of month</p>
+                        <p className="text-xs text-slate-500">Payment Timing</p>
+                        <p className="font-semibold text-slate-950">{plan.paymentModel.paymentTiming}</p>
                       </div>
                     </>
                   )}
@@ -400,7 +403,6 @@ function AgreementDetailModal({ agreement, onClose }) {
                     {plan.latePaymentPolicy.penalty && (
                       <p>
                         Penalty: {plan.latePaymentPolicy.penalty.type} · ₹{plan.latePaymentPolicy.penalty.amount}
-                        {plan.latePaymentPolicy.penalty.maxAmount && ` (Max: ₹${plan.latePaymentPolicy.penalty.maxAmount})`}
                       </p>
                     )}
                   </div>
@@ -561,10 +563,19 @@ export default function AgreementList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedAgreement, setSelectedAgreement] = useState(null)
+  const [showTransactionModal, setShowTransactionModal] = useState(false)
+  const [transactionAgreement, setTransactionAgreement] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+
+  // Pending extension requests state
+  const [pendingExtensions, setPendingExtensions] = useState([])
+  const [loadingExtensions, setLoadingExtensions] = useState(true)
+  const [extensionError, setExtensionError] = useState('')
+  const [selectedExtensionRequest, setSelectedExtensionRequest] = useState(null)
 
   useEffect(() => {
     fetchAgreements()
+    fetchPendingExtensions()
   }, [])
 
   const fetchAgreements = async () => {
@@ -591,6 +602,20 @@ export default function AgreementList() {
     }
   }
 
+  const fetchPendingExtensions = async () => {
+    try {
+      setLoadingExtensions(true)
+      setExtensionError('')
+      const data = await extensionService.getPendingApprovalRequests()
+      setPendingExtensions(Array.isArray(data) ? data : data?.content || data?.data || [])
+    } catch (err) {
+      // Non-critical – don't block the page if this fails
+      setExtensionError(err?.response?.data?.message || 'Could not load pending extension requests.')
+    } finally {
+      setLoadingExtensions(false)
+    }
+  }
+
   const handleCardClick = async (agreementCard) => {
     try {
       setLoadingDetails(true)
@@ -603,6 +628,23 @@ export default function AgreementList() {
       setLoadingDetails(false)
     }
   }
+
+  const handleCreateTransaction = (event, agreement) => {
+    event.stopPropagation(); // Prevent card click when button is clicked
+    
+    // Convert agreement data to expected format for modal
+    const agreementForTransaction = {
+      id: agreement.id,
+      tenantName: agreement.tenantName,
+      roomNumber: agreement.roomNumber,
+      status: agreement.status,
+      deposit: agreement.securityDeposit,
+      // Add any other required fields
+    };
+    
+    setTransactionAgreement(agreementForTransaction);
+    setShowTransactionModal(true);
+  };
 
   const getStatusVariant = (status) => {
     switch (status) {
@@ -649,6 +691,17 @@ export default function AgreementList() {
         />
       )}
 
+      {selectedExtensionRequest && (
+        <ExtensionApprovalModal
+          request={selectedExtensionRequest}
+          onClose={() => setSelectedExtensionRequest(null)}
+          onSuccess={() => {
+            setSelectedExtensionRequest(null)
+            fetchPendingExtensions()
+          }}
+        />
+      )}
+
       <div className="space-y-6">
         {error ? (
           <Alert tone="error" title="Agreement data couldn't be loaded">
@@ -658,6 +711,110 @@ export default function AgreementList() {
             </div>
           </Alert>
         ) : null}
+
+        {/* ── Pending Extension Approvals ── */}
+        {(loadingExtensions || pendingExtensions.length > 0 || extensionError) && (
+          <Card>
+            <CardHeader
+              title={
+                <span className="flex items-center gap-2">
+                  Extension Requests
+                  {!loadingExtensions && pendingExtensions.length > 0 && (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-bold text-white">
+                      {pendingExtensions.length}
+                    </span>
+                  )}
+                </span>
+              }
+              description="Tenant allotment extension requests pending your approval."
+            />
+            <CardContent>
+              {extensionError && !loadingExtensions && (
+                <Alert tone="error" className="mb-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <span>{extensionError}</span>
+                    <Button label="Retry" size="sm" variant="secondary" onClick={fetchPendingExtensions} />
+                  </div>
+                </Alert>
+              )}
+
+              {loadingExtensions ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <Skeleton key={i} className="h-40 rounded-2xl" />
+                  ))}
+                </div>
+              ) : pendingExtensions.length === 0 && !extensionError ? (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                  <span className="text-3xl mb-2">✅</span>
+                  <p className="text-sm font-medium">No pending extension requests</p>
+                  <p className="text-xs mt-1">Tenant extension requests will appear here for your review.</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {pendingExtensions.map((req) => (
+                    <div
+                      key={req.id}
+                      className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3"
+                    >
+                      {/* Request header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-600">
+                            Extension request
+                          </p>
+                          <p className="mt-1 font-semibold text-slate-900 text-sm">
+                            {req.tenantName || 'Unknown tenant'}
+                          </p>
+                          <p className="text-xs text-slate-600 mt-0.5">
+                            {req.roomNumber
+                              ? `Room ${req.roomNumber}${req.floorNumber ? `, Floor ${req.floorNumber}` : ''}`
+                              : 'Room N/A'}
+                          </p>
+                        </div>
+                        <Badge variant="warning">Pending</Badge>
+                      </div>
+
+                      {/* Key details */}
+                      <div className="rounded-xl bg-white border border-amber-200 px-3 py-2 text-sm space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Requested plan</span>
+                          <span className="font-medium text-slate-900 text-right truncate max-w-[140px]">
+                            {req.planName || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Current end</span>
+                          <span className="font-medium text-slate-900">
+                            {req.currentEndDate || req.allotmentEndDate
+                              ? new Date(req.currentEndDate || req.allotmentEndDate).toLocaleDateString()
+                              : 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Requested on</span>
+                          <span className="font-medium text-slate-900">
+                            {req.createdAt || req.requestedAt
+                              ? new Date(req.createdAt || req.requestedAt).toLocaleDateString()
+                              : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action button */}
+                      <Button
+                        label="Review Request"
+                        size="sm"
+                        fullWidth
+                        onClick={() => setSelectedExtensionRequest(req)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader
@@ -771,15 +928,56 @@ export default function AgreementList() {
                       </div>
                     )}
 
-                    <p className="mt-4 text-xs text-slate-400 text-right">
-                      {loadingDetails ? 'Loading details...' : 'Click to view full details →'}
-                    </p>
+                    {/* Action buttons for active agreements */}
+                    {agreement.status === 'ACTIVE' && (
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          label="Create Settlement Transaction"
+                          size="sm"
+                          variant="primary"
+                          onClick={(e) => handleCreateTransaction(e, agreement)}
+                          className="flex-1"
+                        />
+                        <Button
+                          label="View Details"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleCardClick(agreement)}
+                          className="flex-1"
+                        />
+                      </div>
+                    )}
+
+                    {/* Default action text for other statuses */}
+                    {agreement.status !== 'ACTIVE' && (
+                      <p className="mt-4 text-xs text-slate-400 text-right">
+                        {loadingDetails ? 'Loading details...' : 'Click to view full details →'}
+                      </p>
+                    )}
                   </div>
                 )
               })}
             </div>
           </CardContent>
         </Card>
+
+        {/* Settlement Transaction Modal */}
+        {showTransactionModal && (
+          <SettlementTransactionModal
+            isOpen={showTransactionModal}
+            onClose={() => {
+              setShowTransactionModal(false);
+              setTransactionAgreement(null);
+            }}
+            agreement={transactionAgreement}
+            onSuccess={() => {
+              // Refresh agreements list after successful transaction creation
+              fetchAgreements();
+              setShowTransactionModal(false);
+              setTransactionAgreement(null);
+            }}
+          />
+        )}
       </div>
     </>
   )

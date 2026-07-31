@@ -1,9 +1,11 @@
 package com.krunity.HostelManagment.repository;
 
+import com.krunity.HostelManagment.enums.PaymentStatus;
 import com.krunity.HostelManagment.model.OtherChargePayment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,6 +14,7 @@ import java.util.UUID;
 public interface OtherChargePaymentRepository extends JpaRepository<OtherChargePayment, UUID> {
 
     List<OtherChargePayment> findByChargeId(UUID chargeId);
+    List<OtherChargePayment> findByTenantIdAndStatusIn(UUID chargeId, Collection<PaymentStatus> paymentStatus);
 
     Optional<OtherChargePayment> findByChargeIdAndTenantId(UUID chargeId, UUID tenantId);
 

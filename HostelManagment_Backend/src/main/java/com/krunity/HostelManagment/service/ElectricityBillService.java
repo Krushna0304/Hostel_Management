@@ -47,7 +47,7 @@ public class ElectricityBillService {
 
     // A tenant is billed for a month only if they have been allotted the room for
     // at least this many days as of the bill creation date.
-    private static final long MIN_OCCUPANCY_DAYS = 15;
+    private static final long MIN_OCCUPANCY_DAYS = 0;
 
     @Autowired
     private CashPaymentOtpService cashPaymentOtpService;
@@ -410,8 +410,8 @@ public class ElectricityBillService {
         List<UUID> eligibleTenantIds = roomAllotmentRepository
                 .findByRoomAndRoomAllotmentStatusIn(room, RoomAllotmentStatus.occupyingStatuses())
                 .stream()
-                .filter(a -> a.getStartDate() != null
-                        && ChronoUnit.DAYS.between(a.getStartDate(), today) >= MIN_OCCUPANCY_DAYS)
+                .filter(a -> a.getStartDate() != null)
+                        // && ChronoUnit.DAYS.between(a.getStartDate(), today) >= MIN_OCCUPANCY_DAYS)
                 .map(a -> a.getTenant().getUserId())
                 .distinct()
                 .collect(Collectors.toList());

@@ -17,6 +17,7 @@ public interface AgreementRepository extends MongoRepository<Agreement, String> 
     Optional<Agreement> findByIdAndOwnerId(String id, UUID ownerId);
     List<Agreement> findByRoomIdAndStatusIn(UUID roomId, List<AgreementStatus> statuses);
     Optional<Agreement> findByRoomIdAndStatus(UUID roomId, AgreementStatus status);
+    long countByRoomIdAndStatus(UUID roomId, AgreementStatus status);
     
     // Helper method to find active agreement for a room
     default Optional<Agreement> findActiveAgreementByRoomId(UUID roomId) {

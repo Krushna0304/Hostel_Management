@@ -7,11 +7,14 @@ import com.krunity.HostelManagment.dto.RecordPaymentRequest;
 import com.krunity.HostelManagment.dto.TenantDashboardResponse;
 import com.krunity.HostelManagment.enums.RoomAllotmentStatus;
 import com.krunity.HostelManagment.model.RoomAllotment;
+import com.krunity.HostelManagment.model.Room;
 import com.krunity.HostelManagment.model.User;
 import com.krunity.HostelManagment.repository.AgreementRepository;
 import com.krunity.HostelManagment.repository.RoomAllotmentRepository;
+import com.krunity.HostelManagment.repository.RoomRepository;
 import com.krunity.HostelManagment.service.AllotmentService;
 import com.krunity.HostelManagment.service.PaymentScheduleService;
+import com.krunity.HostelManagment.service.PaymentCalculationService;
 import com.krunity.HostelManagment.service.TenantDashboardService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +40,12 @@ public class TenantController {
 
     @Autowired
     private AgreementRepository agreementRepository;
+
+    @Autowired
+    private RoomRepository roomRepository;
+
+    @Autowired
+    private PaymentCalculationService paymentCalculationService;
 
     @Autowired
     private AllotmentService allotmentService;
@@ -123,7 +132,14 @@ public class TenantController {
                 agreementRepository.findById(agreementId)
                         .orElseThrow(() -> new com.krunity.HostelManagment.exception.NotFoundException("Agreement not found"));
 
-        return ResponseEntity.ok(com.krunity.HostelManagment.Mapper.AgreementMapper.toResponse(agreement));
+        com.krunity.HostelManagment.dto.AgreementResponse response =
+                com.krunity.HostelManagment.Mapper.AgreementMapper.toResponse(agreement);
+        response.setRoomNumber(allotment.getRoom().getRoomNumber());
+        response.setRefundableAmount(paymentCalculationService
+                .calculatePaymentBreakdown(agreement.getPlanSnapshot())
+                .getAgreementTimeRefundable());
+
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -140,7 +156,19 @@ public class TenantController {
         
         java.util.List<com.krunity.HostelManagment.dto.AgreementResponse> responses = 
                 agreements.stream()
-                    .map(com.krunity.HostelManagment.Mapper.AgreementMapper::toResponse)
+                    .map(agreement -> {
+                        com.krunity.HostelManagment.dto.AgreementResponse response =
+                                com.krunity.HostelManagment.Mapper.AgreementMapper.toResponse(agreement);
+                        response.setRefundableAmount(paymentCalculationService
+                                .calculatePaymentBreakdown(agreement.getPlanSnapshot())
+                                .getAgreementTimeRefundable());
+                        if (agreement.getRoomId() != null) {
+                            roomRepository.findById(agreement.getRoomId())
+                                    .map(Room::getRoomNumber)
+                                    .ifPresent(response::setRoomNumber);
+                        }
+                        return response;
+                    })
                     .collect(java.util.stream.Collectors.toList());
         
         return ResponseEntity.ok(responses);

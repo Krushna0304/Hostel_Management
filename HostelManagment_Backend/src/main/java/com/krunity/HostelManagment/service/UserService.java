@@ -145,9 +145,10 @@ public class UserService {
         // Get the current owner
         UUID ownerId = com.krunity.HostelManagment.Utils.ApplicationContext.getUser().getUserId();
         
+        // List<RoomAllotmentStatus> eligibleStatus = List.of(RoomAllotmentStatus.ACTIVE, RoomAllotmentStatus.UPCOMING);
         // Get all confirmed room allotments for this owner
         List<RoomAllotment> allotments = roomAllotmentRepository
-                .findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatus(ownerId, RoomAllotmentStatus.ACTIVE);
+                .findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatusNot(ownerId, RoomAllotmentStatus.LEFT);
         
         // Filter by hostel and get unique tenants
         List<User> tenants = allotments.stream()
@@ -159,6 +160,14 @@ public class UserService {
         return tenants.stream()
                 .map(UserMapper::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Get user by ID
+     */
+    public User getUserById(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
     }
 
     /**

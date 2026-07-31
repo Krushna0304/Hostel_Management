@@ -4,6 +4,8 @@ import ProtectedRoute from './components/ProtectedRoute'
 import DashboardLayout from './layouts/DashboardLayout'
 import { useAuthState } from './hooks/useAuthState'
 import { LoadingScreen, ConfirmationProvider } from './components/ui'
+import './styles/realtime-animations.css'
+import './styles/cross-browser-compatibility.css'
 
 const Login = lazy(() => import('./pages/Auth/Login'))
 const Register = lazy(() => import('./pages/Auth/Register'))
@@ -31,6 +33,10 @@ const PaymentMonitoring = lazy(() => import('./pages/MCP/PaymentMonitoring'))
 const Profile = lazy(() => import('./pages/Profile/Profile'))
 const PaymentHistory = lazy(() => import('./pages/PaymentHistory/PaymentHistory'))
 const ReminderSettings = lazy(() => import('./pages/Owner/ReminderSettings'))
+const PlanExpiryDashboard = lazy(() => import('./pages/Owner/PlanExpiryDashboard'))
+const NotificationPreferences = lazy(() => import('./pages/Owner/NotificationPreferences'))
+const TenantPlanExpiryNotifications = lazy(() => import('./pages/Tenant/PlanExpiryNotifications'))
+const ExtensionRequestsPage = lazy(() => import('./pages/Owner/ExtensionRequests'))
 
 function App() {
   const { isAuthenticated, userRole, authenticate } = useAuthState()
@@ -69,6 +75,9 @@ function App() {
               <Route path="settlements" element={<OwnerSettlements />} />
               <Route path="payment-settings" element={<PaymentSettings />} />
               <Route path="reminder-settings" element={<ReminderSettings />} />
+              <Route path="plan-expiry-dashboard" element={<PlanExpiryDashboard />} />
+              <Route path="notification-preferences" element={<NotificationPreferences />} />
+              <Route path="extension-requests" element={<ExtensionRequestsPage />} />
               <Route path="payment-history" element={<PaymentHistory />} />
               <Route path="profile" element={<Profile />} />
             </Route>
@@ -96,6 +105,7 @@ function App() {
               <Route path="other-charges" element={<TenantOtherCharges />} />
               <Route path="electricity-bills" element={<TenantElectricityBills />} />
               <Route path="settlements" element={<TenantSettlements />} />
+              <Route path="plan-expiry-notifications" element={<TenantPlanExpiryNotifications />} />
               <Route path="payment-history" element={<PaymentHistory />} />
               <Route path="profile" element={<Profile />} />
             </Route>

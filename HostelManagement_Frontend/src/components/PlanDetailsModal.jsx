@@ -309,7 +309,6 @@ export default function PlanDetailsModal({ plan, onClose }) {
               <InfoRow label="Payment Mode" value={plan.paymentModel?.mode} />
               <InfoRow label="Payment Timing" value={plan.paymentModel?.paymentTiming} />
               <InfoRow label="Installments" value={plan.paymentModel?.installments} />
-              <InfoRow label="Due Day of Month" value={plan.paymentModel?.dueDayOfMonth} />
             </Section>
           </div>
 
@@ -339,7 +338,6 @@ export default function PlanDetailsModal({ plan, onClose }) {
                 <InfoRow label="Grace Period" value={plan.latePaymentPolicy.gracePeriodDays ? `${plan.latePaymentPolicy.gracePeriodDays} days` : 'Not specified'} />
                 <InfoRow label="Penalty Type" value={plan.latePaymentPolicy.penalty?.type} />
                 <InfoRow label="Penalty Amount" value={plan.latePaymentPolicy.penalty?.amount ? formatCurrency(plan.latePaymentPolicy.penalty.amount) : 'Not specified'} />
-                <InfoRow label="Maximum Penalty" value={plan.latePaymentPolicy.penalty?.maxAmount ? formatCurrency(plan.latePaymentPolicy.penalty.maxAmount) : 'Not specified'} />
               </div>
             </Section>
           )}

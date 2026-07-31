@@ -112,4 +112,117 @@ public class SettlementRequest {
 
     @Column(name = "settled_at")
     private LocalDateTime settledAt;
+
+    // Enhanced Settlement System Fields
+    @Column(name = "settlement_transaction_data", columnDefinition = "TEXT")
+    private String settlementTransactionData;
+
+    @Column(name = "early_settlement_requested")
+    @Builder.Default
+    private boolean earlySettlementRequested = false;
+
+    @Column(name = "settlement_approved_by")
+    private UUID settlementApprovedBy;
+
+    @Column(name = "auto_settlement_eligible")
+    @Builder.Default
+    private boolean autoSettlementEligible = false;
+
+    @Column(name = "transaction_created_at")
+    private LocalDateTime transactionCreatedAt;
+
+    @Column(name = "settlement_requested_at")
+    private LocalDateTime settlementRequestedAt;
+
+    @Column(name = "settlement_approved_at")
+    private LocalDateTime settlementApprovedAt;
+
+    @Column(name = "room_availability_updated")
+    @Builder.Default
+    private boolean roomAvailabilityUpdated = false;
+
+    // Business Methods
+    
+    /**
+     * Updates the status of the settlement request
+     */
+    public void updateStatus(SettlementStatus newStatus, User updatedBy) {
+        this.status = newStatus;
+        this.updatedAt = LocalDateTime.now();
+        
+        // Set specific timestamps and fields based on status
+        switch (newStatus) {
+            case SETTLEMENT_APPROVED:
+                this.settlementApprovedAt = LocalDateTime.now();
+                if (updatedBy != null) {
+                    this.settlementApprovedBy = updatedBy.getUserId();
+                }
+                break;
+            case SETTLEMENT_DONE:
+            case COMPLETED:
+                this.settledAt = LocalDateTime.now();
+                break;
+            default:
+                // No specific timestamp for other statuses
+                break;
+        }
+    }
+
+    /**
+     * Updates the status without specifying updater
+     */
+    public void updateStatus(SettlementStatus newStatus, String updaterType) {
+        this.status = newStatus;
+        this.updatedAt = LocalDateTime.now();
+        
+        // Set specific timestamps based on status
+        switch (newStatus) {
+            case PENDING_OWNER_REVIEW:
+                this.settlementRequestedAt = LocalDateTime.now();
+                break;
+            case SETTLEMENT_DONE:
+            case COMPLETED:
+                this.settledAt = LocalDateTime.now();
+                break;
+            default:
+                break;
+        }
+    }
+
+    /**
+     * Marks room availability as updated
+     */
+    public void markRoomAvailabilityUpdated() {
+        this.roomAvailabilityUpdated = true;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Checks if this is an early settlement request
+     */
+    public boolean isEarlySettlementRequested() {
+        return earlySettlementRequested;
+    }
+
+    /**
+     * Checks if room availability has been updated
+     */
+    public boolean isRoomAvailabilityUpdated() {
+        return roomAvailabilityUpdated;
+    }
+
+    /**
+     * Gets settlement transaction data
+     */
+    public String getSettlementTransactionData() {
+        return settlementTransactionData;
+    }
+
+    /**
+     * Sets settlement transaction data
+     */
+    public void setSettlementTransactionData(String settlementTransactionData) {
+        this.settlementTransactionData = settlementTransactionData;
+        this.updatedAt = LocalDateTime.now();
+    }
 }

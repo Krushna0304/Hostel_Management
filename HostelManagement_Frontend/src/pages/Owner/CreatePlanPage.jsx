@@ -13,7 +13,7 @@ const INITIAL_FORM = {
   planType: '',
   rentDetails: { monthlyRent: '', currency: 'INR' },
   duration: { durationType: 'FIXED', value: 12, unit: 'MONTH', minimumStayMonths: 3 },
-  paymentModel: { mode: 'MONTHLY', paymentTiming: 'PREPAID', installments: 3, dueDayOfMonth: 5 },
+  paymentModel: { mode: 'MONTHLY', paymentTiming: 'PREPAID', installments: 3 },
   charges: {
     securityDeposit: { amount: '', refundable: true, paymentTiming: 'AT_AGREEMENT' },
     cleaningCharges: {
@@ -32,7 +32,7 @@ const INITIAL_FORM = {
   oneTimeCharges: [],
   monthlyRecurringCharges: [],
   freeFacilities: { included: true, facilities: [] },
-  latePaymentPolicy: { gracePeriodDays: 5, penalty: { type: 'PER_DAY', amount: '', maxAmount: '' } },
+  latePaymentPolicy: { gracePeriodDays: 5, penalty: { type: 'PER_DAY', amount: '' } },
   rulesAndRegulations: {
     houseRules: { smokingAllowed: false, petsAllowed: false, quietHours: { from: '22:00', to: '06:00' } },
     facilityUsageRules: [],
@@ -168,6 +168,15 @@ export default function CreatePlanPage() {
     if (!form.planName.trim()) { setError('Plan name is required.'); return }
     if (!form.planType) { setError('Plan type is required.'); return }
     if (!form.rentDetails.monthlyRent) { setError('Monthly rent is required.'); return }
+    
+    // Validate minimum stay vs total duration for fixed duration plans
+    const isNotFixed = form.duration?.durationType === 'NOT_FIXED'
+    const totalDuration = form.duration?.value || 0
+    const minimumStay = form.duration?.minimumStayMonths || 0
+    if (!isNotFixed && totalDuration > 0 && minimumStay > totalDuration) {
+      setError(`Minimum stay (${minimumStay} months) cannot exceed total duration (${totalDuration} months).`);
+      return;
+    }
 
     try {
       setLoading(true)
@@ -211,7 +220,7 @@ export default function CreatePlanPage() {
         },
         latePaymentPolicy: {
           ...form.latePaymentPolicy,
-          penalty: { ...form.latePaymentPolicy.penalty, amount: Number(form.latePaymentPolicy.penalty.amount) || 0, maxAmount: Number(form.latePaymentPolicy.penalty.maxAmount) || 0 },
+          penalty: { ...form.latePaymentPolicy.penalty, amount: Number(form.latePaymentPolicy.penalty.amount) || 0 },
         },
       }
 
@@ -288,9 +297,6 @@ export default function CreatePlanPage() {
                   </Field>
                   <Field label="Penalty Amount (₹)">
                     <NumericInput className={inputCls} value={form.latePaymentPolicy.penalty.amount} onChange={e => set('latePaymentPolicy.penalty.amount', e.target.value)} min="0" />
-                  </Field>
-                  <Field label="Max Penalty (₹)">
-                    <NumericInput className={inputCls} value={form.latePaymentPolicy.penalty.maxAmount} onChange={e => set('latePaymentPolicy.penalty.maxAmount', e.target.value)} min="0" />
                   </Field>
                 </div>
               </Section>

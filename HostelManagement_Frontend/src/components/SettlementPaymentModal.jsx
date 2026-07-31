@@ -5,11 +5,14 @@ import FormInput from './FormInput'
 import { Alert, Button } from './ui'
 import { loadRazorpay, preloadRazorpay } from '../utils/razorpayLoader'
 import settlementService from '../services/settlementService'
+import SettlementRealTimeIndicator from './SettlementRealTimeIndicator'
+import useRealTimeSettlementUpdates from '../hooks/useRealTimeSettlementUpdates'
 
 export default function SettlementPaymentModal({ 
   settlement, 
   onSuccess, 
-  onClose 
+  onClose,
+  enableRealTimeUpdates = true
 }) {
   const [paymentMode, setPaymentMode] = useState('ONLINE')
   const [otp, setOtp] = useState('')
@@ -18,6 +21,28 @@ export default function SettlementPaymentModal({
   const [sendingOtp, setSendingOtp] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
+
+  // Real-time updates for this settlement
+  const { 
+    getSettlementById, 
+    refresh: refreshRealTimeData 
+  } = useRealTimeSettlementUpdates({
+    enabled: enableRealTimeUpdates,
+    settlementIds: settlement ? [settlement.settlementId] : [],
+    userType: 'tenant',
+    onStatusChange: (change) => {
+      if (change.newStatus === 'COMPLETED' || change.newStatus === 'SETTLEMENT_DONE') {
+        // Settlement completed, close modal and refresh
+        onSuccess();
+        onClose();
+      }
+    }
+  });
+
+  // Use real-time settlement data if available
+  const currentSettlement = enableRealTimeUpdates && settlement?.settlementId 
+    ? getSettlementById(settlement.settlementId) || settlement
+    : settlement;
 
   // Preload Razorpay when payment modal opens
   useEffect(() => {
@@ -31,7 +56,7 @@ export default function SettlementPaymentModal({
       setOtpMessage('')
       
       // Use the existing OTP endpoint for settlements
-      const response = await apiClient.post(`/api/cash-payment-otp/send-settlement/${settlement.settlementId}`)
+      const response = await apiClient.post(`/api/cash-payment-otp/send-settlement/${currentSettlement.settlementId}`)
       setOtpSent(true)
       setOtpMessage(response.data.message || 'OTP sent to owner successfully')
     } catch (err) {
@@ -60,8 +85,8 @@ export default function SettlementPaymentModal({
       html: `
         <div style="text-align:left;font-size:15px;">
           <p style="margin-bottom:8px;"><strong>Settlement Payment</strong></p>
-          <p style="margin-bottom:8px;">Amount: <strong>₹${Math.abs(settlement.finalSettlementAmount)?.toLocaleString()}</strong></p>
-          <p style="margin-bottom:8px;">Room: <strong>${settlement.roomNumber || 'N/A'}</strong></p>
+          <p style="margin-bottom:8px;">Amount: <strong>₹${Math.abs(currentSettlement.finalSettlementAmount)?.toLocaleString()}</strong></p>
+          <p style="margin-bottom:8px;">Room: <strong>${currentSettlement.roomNumber || 'N/A'}</strong></p>
           <p>Mode: <strong>${paymentMode === 'CASH' ? '💵 Cash' : '💳 Online (Razorpay)'}</strong></p>
         </div>
       `,
@@ -93,8 +118,8 @@ export default function SettlementPaymentModal({
 
       // Step 2: Create order on backend
       const orderRes = await apiClient.post('/api/payments/create-settlement-order', {
-        settlementId: settlement.settlementId,
-        amount: Math.abs(settlement.finalSettlementAmount),
+        settlementId: currentSettlement.settlementId,
+        amount: Math.abs(currentSettlement.finalSettlementAmount),
         currency: 'INR',
       })
 

@@ -310,9 +310,10 @@ export default function ElectricityAccountManagement() {
         <EmptyState
           title={hostelFilter ? "No accounts in this hostel" : "No electricity accounts found"}
           description={hostelFilter ? "Try selecting a different hostel or create a new account." : "Create electricity accounts for your rooms to start managing electricity bills."}
-          actionLabel="Create Account"
+          actionLabel="Create Account "
+          
+          isButtonDisabled={hostels.length === 0} 
           onAction={() => setShowCreateForm(true)}
-          disabled={hostels.length === 0}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

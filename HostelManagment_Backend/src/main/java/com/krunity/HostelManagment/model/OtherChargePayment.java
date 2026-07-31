@@ -57,8 +57,8 @@ public class OtherChargePayment {
     @Column(name = "transaction_id")
     private String transactionId;
 
-    @Column(name = "notes", length = 500)
-    private String notes;
+    @Column(name = "charge_name", length = 500)
+    private String chargeName;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

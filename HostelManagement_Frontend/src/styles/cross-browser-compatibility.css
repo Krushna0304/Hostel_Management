@@ -1,0 +1,182 @@
+/*
+ * Cross-Browser Compatibility Styles
+ * Task 7.2.5 - Verify and fix cross-browser compatibility issues
+ * 
+ * Adds vendor prefixes and fallbacks for:
+ * - Flexbox (Safari 8-, IE 10-)
+ * - CSS Grid fallbacks
+ * - Transform support
+ * - Scroll behavior
+ * - Backdrop filter (Safari)
+ */
+
+/* ── Flexbox vendor prefixes ─────────────────────────────────────────────── */
+.flex-compat {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+}
+
+.flex-col-compat {
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+      -ms-flex-direction: column;
+          flex-direction: column;
+}
+
+/* ── Scroll behavior cross-browser ──────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Backdrop filter with Safari prefix ─────────────────────────────────── */
+.backdrop-blur-compat {
+  -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+}
+
+/* ── CSS transitions with vendor prefixes ───────────────────────────────── */
+.transition-compat {
+  -webkit-transition: all 0.2s ease;
+  -moz-transition: all 0.2s ease;
+  -o-transition: all 0.2s ease;
+  transition: all 0.2s ease;
+}
+
+/* ── Transform vendor prefixes ──────────────────────────────────────────── */
+.scale-hover:hover {
+  -webkit-transform: scale(1.02);
+      -ms-transform: scale(1.02);
+          transform: scale(1.02);
+}
+
+/* ── User select (prevent text selection on UI elements) ─────────────────── */
+.no-select {
+  -webkit-user-select: none;
+     -moz-user-select: none;
+      -ms-user-select: none;
+          user-select: none;
+}
+
+/* ── Overflow scroll momentum (iOS Safari) ──────────────────────────────── */
+.scroll-momentum {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+
+/* ── Appearance reset (cross-browser form elements) ─────────────────────── */
+.appearance-none-compat {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+}
+
+/* ── Input placeholder color (cross-browser) ────────────────────────────── */
+input::-webkit-input-placeholder,
+textarea::-webkit-input-placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+input::-moz-placeholder,
+textarea::-moz-placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+input:-ms-input-placeholder,
+textarea:-ms-input-placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+/* ── Focus visible (keyboard navigation cross-browser) ──────────────────── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* Fallback for browsers that don't support :focus-visible */
+button:focus,
+a:focus {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* ── Position sticky (IE fallback via position: -webkit-sticky) ─────────── */
+.sticky-compat {
+  position: -webkit-sticky;
+  position: sticky;
+}
+
+/* ── Clamp cross-browser (very old browsers fallback) ───────────────────── */
+/* Modern browsers support clamp() natively; min-height as fallback */
+.modal-content {
+  min-height: 200px;
+  min-height: min(200px, 100%);
+}
+
+/* ── Box sizing (IE 8 and below) ─────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+}
+
+/* ── Loading spinner cross-browser ──────────────────────────────────────── */
+@-webkit-keyframes spin {
+  from { -webkit-transform: rotate(0deg); transform: rotate(0deg); }
+  to   { -webkit-transform: rotate(360deg); transform: rotate(360deg); }
+}
+
+@keyframes spin {
+  from { -webkit-transform: rotate(0deg); transform: rotate(0deg); }
+  to   { -webkit-transform: rotate(360deg); transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  -webkit-animation: spin 0.7s linear infinite;
+          animation: spin 0.7s linear infinite;
+}
+
+/* ── Safari overflow clip fix for modals ────────────────────────────────── */
+.modal-overflow-fix {
+  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
+  /* Prevent bounce scroll on iOS inside modals */
+}
+
+.modal-scroll-area {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Print styles ────────────────────────────────────────────────────────── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .modal-overlay {
+    position: static !important;
+    background: none !important;
+  }
+}

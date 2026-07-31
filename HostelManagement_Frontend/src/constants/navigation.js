@@ -48,6 +48,12 @@ export const ownerNavigation = [
     description: 'Agreement settlement requests',
   },
   {
+    label: 'Extension Requests',
+    to: '/owner/extension-requests',
+    icon: 'clipboard',
+    description: 'Allotment extension requests from tenants',
+  },
+  {
     label: 'Payment Settings',
     to: '/owner/payment-settings',
     icon: 'credit-card',
@@ -58,6 +64,18 @@ export const ownerNavigation = [
     to: '/owner/reminder-settings',
     icon: 'bell',
     description: 'SMS reminders & templates',
+  },
+  {
+    label: 'Plan Expiry',
+    to: '/owner/plan-expiry-dashboard',
+    icon: 'bell',
+    description: 'Plan expiry notification dashboard',
+  },
+  {
+    label: 'Notif. Preferences',
+    to: '/owner/notification-preferences',
+    icon: 'bell',
+    description: 'Configure notification settings',
   },
   {
     label: 'Payment History',
@@ -97,6 +115,12 @@ export const tenantNavigation = [
     to: '/tenant-portal/settlements',
     icon: 'clipboard',
     description: 'Agreement settlement requests',
+  },
+  {
+    label: 'Notifications',
+    to: '/tenant-portal/plan-expiry-notifications',
+    icon: 'bell',
+    description: 'Plan expiry notifications',
   },
   {
     label: 'Payment History',

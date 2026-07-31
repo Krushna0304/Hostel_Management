@@ -20,6 +20,7 @@ public class AgreementResponse {
     private UUID roomId;
     private BigDecimal rent;
     private BigDecimal deposit;
+    private BigDecimal refundableAmount;
     private BigDecimal cleaningCharges;
     private BigDecimal maintenanceCharges;
     private String lightBillPolicy;

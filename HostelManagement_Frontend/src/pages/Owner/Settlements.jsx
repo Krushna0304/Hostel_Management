@@ -3,11 +3,14 @@ import { Alert, Button } from '../../components/ui';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 import SettlementCalculationModal from '../../components/SettlementCalculationModal';
+import SettlementTransactionModal from '../../components/SettlementTransactionModal';
 import SettlementCollectionModal from '../../components/SettlementCollectionModal';
 import SettlementPaymentModal from '../../components/SettlementPaymentModal';
 import SettlementStatusBadge from '../../components/SettlementStatusBadge';
 import SettlementSummary from '../../components/SettlementSummary';
+import SettlementRealTimeIndicator from '../../components/SettlementRealTimeIndicator';
 import settlementService from '../../services/settlementService';
+import useRealTimeSettlementUpdates from '../../hooks/useRealTimeSettlementUpdates';
 import { useSuccessPopup } from '../../hooks/useSuccessPopup';
 
 const Settlements = () => {
@@ -15,16 +18,64 @@ const Settlements = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedSettlement, setSelectedSettlement] = useState(null);
+  const [selectedAgreement, setSelectedAgreement] = useState(null);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [confirmLeftSettlement, setConfirmLeftSettlement] = useState(null);
   const [confirmingLeft, setConfirmingLeft] = useState(false);
+  const [enableRealTimeUpdates, setEnableRealTimeUpdates] = useState(true);
   const { showSuccess } = useSuccessPopup();
 
+  // Real-time updates for all settlements
+  const {
+    settlements: realTimeSettlements,
+    loading: realTimeLoading,
+    error: realTimeError,
+    lastUpdated,
+    connectionStatus,
+    refresh,
+    isPolling
+  } = useRealTimeSettlementUpdates({
+    userType: 'owner',
+    enabled: enableRealTimeUpdates,
+    pollingInterval: 3000, // 3 seconds
+    onStatusChange: (change) => {
+      showSuccess(`Settlement ${change.settlementId.substring(0, 8)}... status changed to ${change.newStatus}`);
+    },
+    onError: (err, message) => {
+      console.warn('Real-time updates error:', message);
+    }
+  });
+
   useEffect(() => {
-    fetchSettlements();
-  }, []);
+    // Fetch initial settlements if real-time updates are disabled
+    // or as a fallback when real-time updates are not available
+    if (!enableRealTimeUpdates) {
+      fetchSettlements();
+    }
+  }, [enableRealTimeUpdates]);
+
+  // Use real-time settlements if available, fallback to manual fetch
+  useEffect(() => {
+    if (enableRealTimeUpdates && realTimeSettlements.length > 0) {
+      setSettlements(realTimeSettlements);
+      setLoading(false);
+      setError('');
+    } else if (!enableRealTimeUpdates || realTimeError) {
+      // Fallback to manual fetching
+      if (!settlements.length) {
+        fetchSettlements();
+      }
+    }
+  }, [realTimeSettlements, enableRealTimeUpdates, realTimeError]);
+  
+  useEffect(() => {
+    if (enableRealTimeUpdates && !realTimeLoading) {
+      setLoading(false);
+    }
+  }, [enableRealTimeUpdates, realTimeLoading]);
 
   const fetchSettlements = async () => {
     try {
@@ -39,9 +90,23 @@ const Settlements = () => {
     }
   };
 
+  // Refresh function that works with both real-time and manual modes
+  const handleRefresh = async () => {
+    if (enableRealTimeUpdates) {
+      await refresh();
+    } else {
+      await fetchSettlements();
+    }
+  };
+
   const handleViewSettlement = (settlement) => {
     setSelectedSettlement(settlement);
     setShowCalculationModal(true);
+  };
+
+  const handleCreateTransaction = (agreement) => {
+    setSelectedAgreement(agreement);
+    setShowTransactionModal(true);
   };
 
   const handleCollectPayment = (settlement) => {
@@ -60,7 +125,7 @@ const Settlements = () => {
       await settlementService.ownerConfirmLeft(confirmLeftSettlement.allotmentId);
       showSuccess('Confirmed tenant has left. Allotment will be marked as LEFT once both parties confirm.');
       setConfirmLeftSettlement(null);
-      fetchSettlements();
+      handleRefresh();
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to confirm. Please try again.');
       setConfirmLeftSettlement(null);
@@ -76,7 +141,7 @@ const Settlements = () => {
 
       await settlementService.completeSettlement(settlementId, paymentReference);
       showSuccess('Settlement marked as completed!');
-      fetchSettlements();
+      handleRefresh();
     } catch (error) {
       console.error('Error completing settlement:', error);
     }
@@ -121,6 +186,66 @@ const Settlements = () => {
         </Button>
       );
     }
+
+    // Enhanced settlement statuses
+    if (settlement.status === 'SETTLEMENT_REQUESTED') {
+      return (
+        <Button
+          onClick={() => handleViewSettlement(settlement)}
+          className="w-full"
+        >
+          Review Settlement Request
+        </Button>
+      );
+    }
+
+    if (settlement.status === 'SETTLEMENT_TRANSACTION_CREATED') {
+      // Check settlement type to determine action
+      if (settlement.settlementType === 'OWNER_PAYABLE' && settlement.finalSettlementAmount > 0) {
+        return (
+          <Button
+            onClick={() => handleMakePayment(settlement)}
+            variant="success"
+            className="w-full"
+          >
+            Make Refund Payment
+          </Button>
+        );
+      }
+      
+      if (settlement.settlementType === 'TENANT_PAYABLE' && settlement.finalSettlementAmount < 0) {
+        return (
+          <Button
+            onClick={() => handleCollectPayment(settlement)}
+            variant="success"
+            className="w-full"
+          >
+            Collect Payment from Tenant
+          </Button>
+        );
+      }
+
+      return (
+        <Button
+          onClick={() => handleViewSettlement(settlement)}
+          variant="outline"
+          className="w-full"
+        >
+          View Transaction Details
+        </Button>
+      );
+    }
+
+    if (settlement.status === 'SETTLEMENT_APPROVED' || settlement.status === 'SETTLEMENT_DONE') {
+      return (
+        <div className="text-sm text-green-600 text-center py-2">
+          {settlement.status === 'SETTLEMENT_DONE' 
+            ? '✓ Settlement completed' 
+            : 'Settlement approved - processing'
+          }
+        </div>
+      );
+    }
     
     if (settlement.allotmentStatus === 'ON_NOTICE_PERIOD' && !settlement.ownerMarkedLeft) {
       return (
@@ -159,7 +284,17 @@ const Settlements = () => {
     );
   };
 
-  if (loading) {
+  // Determine loading state from both sources
+  const isLoading = enableRealTimeUpdates 
+    ? (realTimeLoading && settlements.length === 0) || loading
+    : loading;
+
+  // Determine error state
+  const currentError = enableRealTimeUpdates 
+    ? (realTimeError && !settlements.length ? realTimeError : error)
+    : error;
+
+  if (isLoading) {
     return <LoadingScreen />;
   }
 
@@ -170,18 +305,63 @@ const Settlements = () => {
           <h1 className="text-2xl font-bold">Settlement Requests</h1>
           <p className="text-gray-600">Manage agreement settlement requests from tenants</p>
         </div>
+        
+        {/* Real-time Controls */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEnableRealTimeUpdates(!enableRealTimeUpdates)}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                enableRealTimeUpdates 
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {enableRealTimeUpdates ? 'Real-time: ON' : 'Real-time: OFF'}
+            </button>
+            
+            {!enableRealTimeUpdates && (
+              <Button
+                onClick={handleRefresh}
+                size="sm"
+                variant="outline"
+              >
+                Refresh
+              </Button>
+            )}
+          </div>
+          
+          {enableRealTimeUpdates && (
+            <SettlementRealTimeIndicator
+              userType="owner"
+              enabled={false}
+              settlementState={{
+                lastUpdated,
+                error: realTimeError,
+                isPolling,
+                connectionStatus,
+                statusHistory: {},
+                refresh,
+              }}
+              onStatusChange={(change) => {
+                showSuccess(`Settlement ${change.settlementId.substring(0, 8)}... status updated`);
+              }}
+              className="text-sm"
+            />
+          )}
+        </div>
       </div>
 
-      {error ? (
+      {currentError ? (
         <Alert tone="error">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>{error}</span>
-            <Button label="Retry" variant="secondary" onClick={fetchSettlements} />
+            <span>{currentError}</span>
+            <Button label="Retry" variant="secondary" onClick={handleRefresh} />
           </div>
         </Alert>
       ) : null}
 
-      {!error && settlements.length === 0 ? (
+      {!currentError && settlements.length === 0 ? (
         <EmptyState
           title="No Settlement Requests"
           description="You don't have any settlement requests yet. Tenants can request settlements from their dashboard."
@@ -197,6 +377,12 @@ const Settlements = () => {
               <SettlementSummary
                 settlement={settlement}
                 showActions={true}
+                showTransactionDetails={true}
+                enableRealTimeUpdates={enableRealTimeUpdates}
+                userType="owner"
+                onSettlementUpdate={(change) => {
+                  showSuccess(`Settlement updated: ${change.newStatus}`);
+                }}
                 onAction={renderSettlementActions}
               />
             </div>
@@ -213,7 +399,21 @@ const Settlements = () => {
           }}
           settlementId={selectedSettlement?.settlementId}
           settlement={selectedSettlement}
-          onSuccess={fetchSettlements}
+          userType="owner"
+          enableRealTimeUpdates={enableRealTimeUpdates}
+          onSuccess={handleRefresh}
+        />
+      )}
+
+      {showTransactionModal && (
+        <SettlementTransactionModal
+          isOpen={showTransactionModal}
+          onClose={() => {
+            setShowTransactionModal(false);
+            setSelectedAgreement(null);
+          }}
+          agreement={selectedAgreement}
+          onSuccess={handleRefresh}
         />
       )}
 
@@ -224,7 +424,7 @@ const Settlements = () => {
             setShowCollectionModal(false);
             setSelectedSettlement(null);
           }}
-          onSuccess={fetchSettlements}
+          onSuccess={handleRefresh}
         />
       )}
 
@@ -235,7 +435,7 @@ const Settlements = () => {
             setShowPaymentModal(false);
             setSelectedSettlement(null);
           }}
-          onSuccess={fetchSettlements}
+          onSuccess={handleRefresh}
         />
       )}
 

@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -15,11 +16,13 @@ public class SettlementCalculationDto {
     private String agreementId;
     private String tenantName;
     private String roomNumber;
-    
+    private LocalDate requestedEndDate;
+
     // Financial Breakdown
     private BigDecimal securityDeposit;
     private BigDecimal outstandingRent;
     private BigDecimal outstandingCharges;
+    private BigDecimal outstandingElectricityBills;
     private BigDecimal damageCharges;
     private BigDecimal cleaningCharges;
     private BigDecimal otherDeductions;

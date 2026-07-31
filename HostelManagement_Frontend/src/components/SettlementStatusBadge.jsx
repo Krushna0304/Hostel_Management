@@ -3,6 +3,7 @@ import { Badge } from './ui/Badge';
 const SettlementStatusBadge = ({ status }) => {
   const getStatusConfig = (status) => {
     const statusConfig = {
+      // Original statuses
       PENDING_OWNER_REVIEW: { 
         variant: 'warning', 
         label: 'Pending Review',
@@ -42,6 +43,50 @@ const SettlementStatusBadge = ({ status }) => {
         variant: 'destructive', 
         label: 'Rejected',
         description: 'Settlement request was rejected'
+      },
+      
+      // Enhanced settlement statuses (from Enhanced Settlement System)
+      SETTLEMENT_REQUESTED: {
+        variant: 'warning',
+        label: 'Settlement Requested', 
+        description: 'Settlement has been requested by tenant'
+      },
+      SETTLEMENT_TRANSACTION_CREATED: {
+        variant: 'secondary',
+        label: 'Transaction Created',
+        description: 'Settlement transaction has been created'
+      },
+      SETTLEMENT_APPROVED: {
+        variant: 'success',
+        label: 'Approved',
+        description: 'Settlement has been approved by owner'
+      },
+      SETTLEMENT_DONE: {
+        variant: 'success',
+        label: 'Settlement Complete',
+        description: 'Settlement transaction has been completed'
+      },
+      
+      // Room allotment related statuses
+      SETTLEMENT_PENDING: {
+        variant: 'warning',
+        label: 'Settlement Pending',
+        description: 'Settlement is pending for this allotment'
+      },
+      SETTLEMENT_TASK: {
+        variant: 'secondary',
+        label: 'Settlement Task',
+        description: 'Settlement task needs to be completed'
+      },
+      ON_NOTICE_PERIOD: {
+        variant: 'warning',
+        label: 'Notice Period',
+        description: 'Tenant is in notice period'
+      },
+      ALLOTMENT_ACTION_PENDING: {
+        variant: 'destructive',
+        label: 'Action Required',
+        description: 'Allotment action is pending'
       }
     };
 

@@ -30,16 +30,18 @@ public class RoomService {
     private final FloorRepository floorRepository;
     private final AgreementRepository agreementRepository;
     private final UserRepository userRepository;
-    
+    private final RoomAvailabilityService roomAvailabilityService;
+
     public RoomService(HostelRepository hostelRepository, RoomRepository roomRepository, FloorRepository floorRepository, 
                       RoomAllotmentRepository roomAllotmentRepository, AgreementRepository agreementRepository, 
-                      UserRepository userRepository) {
+                      UserRepository userRepository,RoomAvailabilityService roomAvailabilityService) {
         this.roomRepository = roomRepository;
         this.floorRepository = floorRepository;
         this.hostelRepository = hostelRepository;
         this.roomAllotmentRepository = roomAllotmentRepository;
         this.agreementRepository = agreementRepository;
         this.userRepository = userRepository;
+        this.roomAvailabilityService =roomAvailabilityService;
     }
 
     @Transactional
@@ -113,11 +115,25 @@ public class RoomService {
         if (deletedCount == 0) {throw new NotFoundException("Room not found or unauthorized");}
     }
 
+    public List<RoomResponse> getRoomsByFilter(String hostelId, String floorId, LocalDate startDate, LocalDate endDate, Long minBedCnt, String roomType, Boolean roomStatus) {
+        List<RoomResponse> rooms = getAllRooms(hostelId, floorId, startDate, endDate);
 
-    public List<RoomResponse> getAllRooms(String hostelId,String floorId) {
+        return rooms.stream().filter(roomResponse -> {
+            boolean matchesType   = (roomType == null || roomType.equalsIgnoreCase("ALL"))
+                                    || roomResponse.getRoomType().equalsIgnoreCase(roomType);
+            boolean matchesBeds   = (minBedCnt == null) || roomResponse.getAvailableBeds() >= minBedCnt;
+            boolean matchesStatus = (roomStatus == null) || roomResponse.getIsActive().equals(roomStatus);
+            return matchesType && matchesBeds && matchesStatus;
+        }).toList();
+    }
+
+    public List<RoomResponse> getAllRooms(String hostelId,String floorId,LocalDate startDate ,LocalDate endDate) {
         UUID hostelIdUUID = UUID.fromString(hostelId);
         UUID floorIdUUID = UUID.fromString(floorId);
         UUID ownerId = ApplicationContext.getUser().getUserId();
+
+        startDate = startDate == null ? LocalDate.now() : startDate;
+        endDate = endDate == null ? LocalDate.now() : endDate;
 
         Hostel hostel = hostelRepository.findByHostelIdAndOwner_UserId(hostelIdUUID, ownerId);
         if (hostel == null) {
@@ -126,9 +142,14 @@ public class RoomService {
 
         List<Room> rooms = roomRepository.findByHostel_HostelIdAndFloor_FloorId(hostelIdUUID,floorIdUUID);
 
+
         List<RoomResponse> roomResponses = rooms.stream()
                 .map(RoomMapper::toDto)
                 .toList();
+
+        for(RoomResponse roomResponse : roomResponses) {
+            roomResponse.setAvailableBeds(roomAvailabilityService.getAvailableBeds(UUID.fromString(roomResponse.getRoomId()),startDate,endDate));
+        }
         return roomResponses;
     }
     public List<RoomResponse> getAllActiveRooms(String hostelId,String floorId) {

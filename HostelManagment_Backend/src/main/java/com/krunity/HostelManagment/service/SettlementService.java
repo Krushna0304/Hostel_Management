@@ -38,6 +38,9 @@ public class SettlementService {
     private AgreementRepository agreementRepository;
 
     @Autowired
+    private OtherChargePaymentService otherChargePaymentService;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -51,10 +54,19 @@ public class SettlementService {
     private TenantPaymentPlanRepository paymentPlanRepository;
 
     @Autowired
-    private InstallmentInvoiceRepository installmentInvoiceRepository;
+    private PaymentRequestScheduleRepository paymentRequestScheduleRepository;
 
     @Autowired
     private OtherChargeRepository otherChargeRepository;
+
+    @Autowired
+    private OtherChargePaymentRepository otherChargePaymentRepository;
+
+    @Autowired
+    private ElectricityPaymentRepository electricityPaymentRepository;
+
+    @Autowired
+    private PaymentCalculationService paymentCalculationService;
 
     @Autowired
     private NotificationService notificationService;
@@ -117,7 +129,7 @@ public class SettlementService {
                 .owner(owner)
                 .room(room)
                 .status(SettlementStatus.PENDING_OWNER_REVIEW)
-                .securityDeposit(agreement.getDeposit())
+                .securityDeposit(calculateRefundableAmount(agreement))
                 .tenantNotes(requestDto.getTenantNotes())
                 .requestedEndDate(requestDto.getRequestedEndDate())
                 .build();
@@ -148,22 +160,26 @@ public class SettlementService {
         Agreement agreement = agreementRepository.findById(settlement.getAgreementId())
                 .orElseThrow(() -> new NotFoundException("Agreement not found"));
 
-        // Calculate outstanding amounts
-        BigDecimal outstandingRent = calculateOutstandingRent(settlement.getAgreementId());
-        BigDecimal outstandingCharges = calculateOutstandingCharges(agreement.getUserId());
+        LocalDate settlementDate = settlement.getRequestedEndDate();
+        BigDecimal refundableAmount = calculateRefundableAmount(agreement);
+        BigDecimal outstandingRent = calculateOutstandingRent(settlement.getAgreementId(), settlementDate);
+        BigDecimal outstandingCharges = calculateOutstandingCharges(agreement.getUserId(), settlementDate);
+        BigDecimal outstandingElectricityBills = calculateOutstandingElectricityBills(agreement, settlementDate);
 
         // Get outstanding items details
-        List<SettlementCalculationDto.OutstandingItemDto> outstandingItems = getOutstandingItemsDetails(agreement);
+        List<SettlementCalculationDto.OutstandingItemDto> outstandingItems =
+                getOutstandingItemsDetails(agreement, settlementDate);
 
         // Calculate total deductions
         BigDecimal totalDeductions = outstandingRent
                 .add(outstandingCharges)
+                .add(outstandingElectricityBills)
                 .add(settlement.getDamageCharges())
                 .add(settlement.getCleaningCharges())
                 .add(settlement.getOtherDeductions());
 
         // Calculate final settlement amount
-        BigDecimal finalAmount = settlement.getSecurityDeposit().subtract(totalDeductions);
+        BigDecimal finalAmount = refundableAmount.subtract(totalDeductions);
         String settlementType = finalAmount.compareTo(BigDecimal.ZERO) >= 0 ? "OWNER_PAYABLE" : "TENANT_PAYABLE";
 
         return SettlementCalculationDto.builder()
@@ -171,9 +187,10 @@ public class SettlementService {
                 .agreementId(settlement.getAgreementId())
                 .tenantName(settlement.getTenant().getDisplayName())
                 .roomNumber(settlement.getRoom() != null ? settlement.getRoom().getRoomNumber() : "N/A")
-                .securityDeposit(settlement.getSecurityDeposit())
+                .securityDeposit(refundableAmount)
                 .outstandingRent(outstandingRent)
                 .outstandingCharges(outstandingCharges)
+                .outstandingElectricityBills(outstandingElectricityBills)
                 .damageCharges(settlement.getDamageCharges())
                 .cleaningCharges(settlement.getCleaningCharges())
                 .otherDeductions(settlement.getOtherDeductions())
@@ -189,6 +206,7 @@ public class SettlementService {
                 .damageDescription(settlement.getDamageDescription())
                 .createdAt(settlement.getCreatedAt())
                 .updatedAt(settlement.getUpdatedAt())
+                .requestedEndDate(settlement.getRequestedEndDate())
                 .build();
     }
 
@@ -224,6 +242,11 @@ public class SettlementService {
             return settlement;
         }
 
+        Agreement agreement = agreementRepository.findById(settlement.getAgreementId())
+                .orElseThrow(() -> new NotFoundException("Agreement not found"));
+        BigDecimal refundableAmount = calculateRefundableAmount(agreement);
+        settlement.setSecurityDeposit(refundableAmount);
+
         // Update settlement with owner's charges
         settlement.setDamageCharges(approvalDto.getDamageCharges());
         settlement.setCleaningCharges(approvalDto.getCleaningCharges());
@@ -232,21 +255,24 @@ public class SettlementService {
         settlement.setDamageDescription(approvalDto.getDamageDescription());
 
         // Calculate final amounts
-        BigDecimal outstandingRent = calculateOutstandingRent(settlement.getAgreementId());
-        BigDecimal outstandingCharges = calculateOutstandingCharges(settlement.getTenant().getUserId());
+        LocalDate settlementDate = settlement.getRequestedEndDate();
+        BigDecimal outstandingRent = calculateOutstandingRent(settlement.getAgreementId(), settlementDate);
+        BigDecimal outstandingCharges = calculateOutstandingCharges(settlement.getTenant().getUserId(), settlementDate);
+        BigDecimal outstandingElectricityBills = calculateOutstandingElectricityBills(agreement, settlementDate);
 
         settlement.setOutstandingRent(outstandingRent);
         settlement.setOutstandingCharges(outstandingCharges);
 
         BigDecimal totalDeductions = outstandingRent
                 .add(outstandingCharges)
+                .add(outstandingElectricityBills)
                 .add(settlement.getDamageCharges())
                 .add(settlement.getCleaningCharges())
                 .add(settlement.getOtherDeductions());
 
         settlement.setTotalDeductions(totalDeductions);
 
-        BigDecimal finalAmount = settlement.getSecurityDeposit().subtract(totalDeductions);
+        BigDecimal finalAmount = refundableAmount.subtract(totalDeductions);
         settlement.setFinalSettlementAmount(finalAmount.abs());
 
         if (finalAmount.compareTo(BigDecimal.ZERO) >= 0) {
@@ -342,7 +368,7 @@ public class SettlementService {
         return dto;
     }
 
-    private BigDecimal calculateOutstandingRent(String agreementId) {
+    private BigDecimal calculateOutstandingRent(String agreementId, LocalDate settlementDate) {
         // Find the payment plan for this agreement
         Optional<TenantPaymentPlan> paymentPlanOpt = paymentPlanRepository.findByAgreementId(agreementId);
         
@@ -351,15 +377,16 @@ public class SettlementService {
         }
         
         TenantPaymentPlan paymentPlan = paymentPlanOpt.get();
-        List<InstallmentInvoice> overdueInvoices = installmentInvoiceRepository
-                .findByPaymentPlanAndStatus(paymentPlan, com.krunity.HostelManagment.enums.InvoiceStatus.OVERDUE);
-        
-        return overdueInvoices.stream()
-                .map(InstallmentInvoice::getTotalAmount)
+        return paymentRequestScheduleRepository.findByTenantPaymentPlan(paymentPlan).stream()
+                .filter(schedule -> schedule.getDueDate() != null && !schedule.getDueDate().isAfter(settlementDate))
+                .filter(schedule -> schedule.getPaymentStatus() != com.krunity.HostelManagment.enums.TransactionStatus.COMPLETED)
+                .filter(schedule -> schedule.getPaymentStatus() != com.krunity.HostelManagment.enums.TransactionStatus.CANCELLED)
+                .filter(schedule -> schedule.getPaymentStatus() != com.krunity.HostelManagment.enums.TransactionStatus.FAILED)
+                .map(this::getOutstandingInstallmentAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private BigDecimal calculateOutstandingCharges(UUID tenantId) {
+    private BigDecimal calculateOutstandingCharges(UUID tenantId, LocalDate settlementDate) {
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new NotFoundException("Tenant not found"));
                 
@@ -367,12 +394,29 @@ public class SettlementService {
                 .findByTenantAndPaymentStatusIn(tenant,
                     Arrays.asList(PaymentStatus.PENDING, PaymentStatus.OVERDUE));
 
-        return pendingCharges.stream()
+        BigDecimal amt1 = otherChargePaymentService.calculateOutstandingCharge(tenantId);
+        BigDecimal amt2 =  pendingCharges.stream()
+                .filter(charge -> isChargeDueBySettlementDate(charge, settlementDate))
                 .map(charge -> charge.getAmount().subtract(charge.getPaidAmount() != null ? charge.getPaidAmount() : BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return amt1.add(amt2);
+    }
+
+    private BigDecimal calculateOutstandingElectricityBills(Agreement agreement, LocalDate settlementDate) {
+        if (agreement.getRoomId() == null) {
+            return BigDecimal.ZERO;
+        }
+
+        return electricityPaymentRepository.findByTenantIdWithBillDetails(agreement.getUserId()).stream()
+                .filter(payment -> payment.getStatus() != PaymentStatus.COMPLETED)
+                .filter(payment -> payment.getElectricityBill() != null)
+                .filter(payment -> agreement.getRoomId().equals(payment.getElectricityBill().getRoomId()))
+                .map(ElectricityPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private List<SettlementCalculationDto.OutstandingItemDto> getOutstandingItemsDetails(Agreement agreement) {
+    private List<SettlementCalculationDto.OutstandingItemDto> getOutstandingItemsDetails(
+            Agreement agreement, LocalDate settlementDate) {
         List<SettlementCalculationDto.OutstandingItemDto> items = new ArrayList<>();
 
         // Add overdue rent installments
@@ -380,16 +424,22 @@ public class SettlementService {
         
         if (paymentPlanOpt.isPresent()) {
             TenantPaymentPlan paymentPlan = paymentPlanOpt.get();
-            List<InstallmentInvoice> overdueInvoices = installmentInvoiceRepository
-                    .findByPaymentPlanAndStatus(paymentPlan, com.krunity.HostelManagment.enums.InvoiceStatus.OVERDUE);
+            List<PaymentRequestSchedule> schedules = paymentRequestScheduleRepository
+                    .findByTenantPaymentPlan(paymentPlan);
 
-            for (InstallmentInvoice invoice : overdueInvoices) {
+            for (PaymentRequestSchedule schedule : schedules) {
+                if (schedule.getDueDate() == null || schedule.getDueDate().isAfter(settlementDate)
+                        || schedule.getPaymentStatus() == com.krunity.HostelManagment.enums.TransactionStatus.COMPLETED
+                        || schedule.getPaymentStatus() == com.krunity.HostelManagment.enums.TransactionStatus.CANCELLED
+                        || schedule.getPaymentStatus() == com.krunity.HostelManagment.enums.TransactionStatus.FAILED) {
+                    continue;
+                }
                 items.add(SettlementCalculationDto.OutstandingItemDto.builder()
-                        .type("RENT")
-                        .description("Rent installment #" + invoice.getInstallmentNumber())
-                        .amount(invoice.getTotalAmount())
-                        .dueDate(invoice.getDueDate().toString())
-                        .status(invoice.getStatus().toString())
+                        .type("INSTALLMENT")
+                        .description("Installment #" + schedule.getInstallmentNumber())
+                        .amount(getOutstandingInstallmentAmount(schedule))
+                        .dueDate(schedule.getDueDate().toString())
+                        .status(schedule.getPaymentStatus().toString())
                         .build());
             }
         }
@@ -404,6 +454,7 @@ public class SettlementService {
                         Arrays.asList(PaymentStatus.PENDING, PaymentStatus.OVERDUE));
 
             for (OtherCharge charge : pendingCharges) {
+
                 BigDecimal outstandingAmount = charge.getAmount().subtract(
                     charge.getPaidAmount() != null ? charge.getPaidAmount() : BigDecimal.ZERO);
                 if (outstandingAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -416,9 +467,70 @@ public class SettlementService {
                             .build());
                 }
             }
+
+            List<OtherChargePayment> pendingCharges2 = otherChargePaymentService.getOutstandingCharge(tenant.getUserId());
+//
+            for (OtherChargePayment charge : pendingCharges2) {
+
+                BigDecimal outstandingAmount = charge.getAmount();
+                if (outstandingAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    items.add(SettlementCalculationDto.OutstandingItemDto.builder()
+//                            .type(charge.getgetCategory().toString())
+                            .description(charge.getChargeName())
+                            .amount(outstandingAmount)
+//                            .dueDate(charge.getCharge(). != null ? charge.getDueDate().toString() : "N/A")
+                            .status(charge.getStatus().toString())
+                            .build());
+                }
+            }
+        }
+
+        if (agreement.getRoomId() != null) {
+            for (ElectricityPayment payment : electricityPaymentRepository
+                    .findByTenantIdWithBillDetails(agreement.getUserId())) {
+                ElectricityBill bill = payment.getElectricityBill();
+                if (payment.getStatus() == PaymentStatus.COMPLETED || bill == null
+                        || !agreement.getRoomId().equals(bill.getRoomId())
+                ) {
+                    continue;
+                }
+                items.add(SettlementCalculationDto.OutstandingItemDto.builder()
+                        .type("ELECTRICITY")
+                        .description("Electricity bill - " + bill.getBillMonth() + "/" + bill.getBillYear())
+                        .amount(payment.getAmount())
+                        .dueDate(bill.getDueDate() != null ? bill.getDueDate().toLocalDate().toString() : "N/A")
+                        .status(payment.getStatus().toString())
+                        .build());
+            }
         }
 
         return items;
+    }
+
+    private BigDecimal calculateRefundableAmount(Agreement agreement) {
+        return paymentCalculationService.calculatePaymentBreakdown(agreement.getPlanSnapshot())
+                .getAgreementTimeRefundable();
+    }
+
+    private BigDecimal getOutstandingInstallmentAmount(PaymentRequestSchedule schedule) {
+        long paidAmount = schedule.getPaidAmount() != null ? schedule.getPaidAmount() : 0L;
+        long lateFee = schedule.getLateFeeApplied() != null ? schedule.getLateFeeApplied() : 0L;
+        return BigDecimal.valueOf(schedule.getAmount() - paidAmount + lateFee);
+    }
+
+    private boolean isChargeDueBySettlementDate(OtherCharge charge, LocalDate settlementDate) {
+        LocalDate chargeDate = charge.getDueDate() != null
+                ? charge.getDueDate().toLocalDate()
+                : charge.getCreatedAt() != null ? charge.getCreatedAt().toLocalDate() : settlementDate;
+        return !chargeDate.isAfter(settlementDate);
+    }
+
+    private boolean isElectricityBillDueBySettlementDate(ElectricityBill bill, LocalDate settlementDate) {
+        if (bill.getDueDate() != null) {
+            return !bill.getDueDate().toLocalDate().isAfter(settlementDate);
+        }
+        LocalDate billMonth = LocalDate.of(bill.getBillYear(), bill.getBillMonth(), 1);
+        return !billMonth.isAfter(settlementDate.withDayOfMonth(1));
     }
 
     private void applySettlementEndDateToAllotment(SettlementRequest settlement) {

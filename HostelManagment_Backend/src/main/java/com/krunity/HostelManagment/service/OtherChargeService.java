@@ -46,10 +46,10 @@ public class OtherChargeService {
 
     // A tenant is included in a room (split) charge only if they have occupied the
     // room for at least this many days, mirroring the electricity bill rule.
-    private static final long MIN_OCCUPANCY_DAYS = 15;
+    private static final long MIN_OCCUPANCY_DAYS = 0;
 
     @Transactional
-    public OtherChargeResponse createOtherCharge(OtherChargeRequest request, UUID ownerId) {
+    public OtherChargeResponse createOtherCharge(OtherChargeRequest request, UUID ownerId) throws Exception {
         log.info("Creating other charge: {} for owner: {}", request.getChargeName(), ownerId);
 
         // Validate request
@@ -103,14 +103,18 @@ public class OtherChargeService {
                 .active(true)
                 .build();
 
+
         charge = otherChargeRepository.save(charge);
+
 
         // Create installments if enabled; otherwise split a room charge into one
         // PENDING share per eligible tenant (full-payment split-among-tenants).
         if (request.getInstallmentEnabled() && request.getInstallmentCount() != null && request.getInstallmentCount() > 1) {
             createInstallments(charge);
         } else if (charge.isRoomBased()) {
+//            createTenantShares(charge);
             createRoomChargeShares(charge);
+
         }
 
         // Send SMS notification to affected tenants if owner has SMS reminders enabled
@@ -120,6 +124,29 @@ public class OtherChargeService {
         return mapToResponse(charge);
     }
 
+    @Transactional
+    public void createTenantShares(OtherCharge charge) {
+
+        String roomId = charge.getRoom().getRoomId().toString();
+        List<RoomAllotment> roomTenants = roomAllotmentRepository.findByRoom_RoomIdAndRoomAllotmentStatusNot(UUID.fromString(roomId),RoomAllotmentStatus.LEFT);
+
+        List<OtherChargePayment> tenantShares = new ArrayList<>();
+
+        BigDecimal cnt = BigDecimal.valueOf(roomTenants.size());
+        BigDecimal shareAmount = charge.getAmount().divide(cnt);
+
+        for(RoomAllotment roomtenant: roomTenants){
+            OtherChargePayment share = OtherChargePayment.builder()
+                    .chargeId(charge.getChargeId())
+                    .amount(shareAmount)
+                    .tenantId(roomtenant.getTenant().getUserId())
+                    .chargeName(charge.getDescription())
+                    .status(PaymentStatus.PENDING)
+                    .build();
+            tenantShares.add(share);
+        }
+        otherChargePaymentRepository.saveAll(tenantShares);
+    }
     @Transactional
     public void createInstallments(OtherCharge charge) {
         if (!charge.getInstallmentEnabled() || charge.getInstallmentCount() == null) {
@@ -189,7 +216,7 @@ public class OtherChargeService {
      * Eligible = currently occupying the room and allotted for at least
      * {@link #MIN_OCCUPANCY_DAYS} days (same rule as electricity bills).
      */
-    private void createRoomChargeShares(OtherCharge charge) {
+    private void createRoomChargeShares(OtherCharge charge) throws  Exception {
         LocalDate today = LocalDate.now();
         List<User> eligible = roomAllotmentRepository
                 .findByRoomAndRoomAllotmentStatusIn(charge.getRoom(), RoomAllotmentStatus.occupyingStatuses())
@@ -201,17 +228,19 @@ public class OtherChargeService {
 
         if (eligible.isEmpty()) {
             log.warn("No eligible tenants for room charge {}; no shares created", charge.getChargeId());
-            return;
+            throw new RuntimeException("No eligible tenants");
         }
 
         List<BigDecimal> shares = splitAmount(charge.getAmount(), eligible.size());
         for (int i = 0; i < eligible.size(); i++) {
-            otherChargePaymentRepository.save(OtherChargePayment.builder()
+            OtherChargePayment other = OtherChargePayment.builder()
                     .chargeId(charge.getChargeId())
+                    .chargeName(charge.getChargeName())
                     .tenantId(eligible.get(i).getUserId())
                     .amount(shares.get(i))
                     .status(PaymentStatus.PENDING)
-                    .build());
+                    .build();
+            otherChargePaymentRepository.save(other);
         }
         log.info("Room charge {} split into {} share(s)", charge.getChargeId(), eligible.size());
     }
@@ -443,7 +472,8 @@ public class OtherChargeService {
             builder.roomId(charge.getRoom().getRoomId())
                    .roomNumber(charge.getRoom().getRoomNumber());
 
-            List<OtherChargePayment> shares = otherChargePaymentRepository.findByChargeId(charge.getChargeId());
+            UUID chargeId = charge.getChargeId();
+            List<OtherChargePayment> shares = otherChargePaymentRepository.findByChargeId(chargeId);
             List<OtherChargeResponse.TenantSummary> roomTenants;
 
             if (!shares.isEmpty()) {

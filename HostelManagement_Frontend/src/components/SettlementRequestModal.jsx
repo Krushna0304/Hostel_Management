@@ -5,6 +5,29 @@ import { Alert } from './ui/Alert';
 import settlementService from '../services/settlementService';
 import { useSuccessPopup } from '../hooks/useSuccessPopup';
 
+const getRefundableAmount = (agreement) => {
+  if (agreement.refundableAmount != null) {
+    return Number(agreement.refundableAmount) || 0;
+  }
+
+  const charges = agreement.planSnapshot?.charges;
+  const securityDeposit = charges?.securityDeposit;
+  const customCharges = charges?.customCharges?.oneTimeCharges || [];
+  const refundableCustomCharges = customCharges.reduce((total, charge) => {
+    const isCollectedAtAgreement = !charge.timing || charge.timing === 'AT_AGREEMENT';
+    return charge.applicable !== false && charge.refundable && isCollectedAtAgreement
+      ? total + (Number(charge.amount) || 0)
+      : total;
+  }, 0);
+
+  const refundableSecurityDeposit = securityDeposit?.refundable !== false &&
+    (!securityDeposit?.paymentTiming || securityDeposit.paymentTiming === 'AT_AGREEMENT')
+    ? Number(securityDeposit.amount) || 0
+    : 0;
+
+  return refundableSecurityDeposit + refundableCustomCharges;
+};
+
 const SettlementRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
   const [formData, setFormData] = useState({
     requestedEndDate: '',
@@ -13,6 +36,7 @@ const SettlementRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { showSuccess } = useSuccessPopup();
+  const refundableAmount = getRefundableAmount(agreement);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -123,7 +147,7 @@ const SettlementRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
           <h3 className="font-medium mb-2">Agreement Details</h3>
           <div className="text-sm text-gray-600 space-y-1">
             <p><span className="font-medium">Room:</span> {agreement.roomNumber || 'N/A'}</p>
-            <p><span className="font-medium">Security Deposit:</span> ₹{agreement.deposit?.toLocaleString()}</p>
+            <p><span className="font-medium">Refundable Amount:</span> ₹{refundableAmount.toLocaleString()}</p>
             <p><span className="font-medium">Status:</span> {agreement.status}</p>
           </div>
         </div>

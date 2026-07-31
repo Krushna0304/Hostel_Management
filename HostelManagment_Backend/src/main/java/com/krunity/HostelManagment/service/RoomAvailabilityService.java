@@ -1,11 +1,13 @@
 package com.krunity.HostelManagment.service;
 
 import com.krunity.HostelManagment.dto.RoomAvailabilityResponse;
+import com.krunity.HostelManagment.enums.AgreementStatus;
 import com.krunity.HostelManagment.enums.RoomAllotmentStatus;
 import com.krunity.HostelManagment.enums.RoomType;
 import com.krunity.HostelManagment.exception.ConflictException;
 import com.krunity.HostelManagment.exception.NotFoundException;
 import com.krunity.HostelManagment.model.Room;
+import com.krunity.HostelManagment.repository.AgreementRepository;
 import com.krunity.HostelManagment.repository.FloorRepository;
 import com.krunity.HostelManagment.repository.RoomAvailabilityRepository;
 import com.krunity.HostelManagment.repository.RoomRepository;
@@ -24,6 +26,7 @@ public class RoomAvailabilityService {
     private final RoomAvailabilityRepository roomAvailabilityRepository;
     private final RoomRepository roomRepository;
     private final FloorRepository floorRepository;
+    private final AgreementRepository agreementRepository;
 
     @Transactional(readOnly = true)
     public List<RoomAvailabilityResponse> getAvailableRooms(UUID floorId, LocalDate startDate, LocalDate endDate, RoomType roomType) {
@@ -34,12 +37,21 @@ public class RoomAvailabilityService {
         floorRepository.findById(floorId)
                 .orElseThrow(() -> new NotFoundException("Floor not found with ID: " + floorId));
 
-        return roomAvailabilityRepository.findAvailableRoomsByFloor(
+        List<RoomAvailabilityResponse> rooms = roomAvailabilityRepository.findAvailableRoomsByFloor(
                 floorId,
                 startDate,
                 endDate,
                 RoomAllotmentStatus.occupyingStatuses(),
                 roomType);
+
+        for (RoomAvailabilityResponse room : rooms) {
+            long pendingCount = agreementRepository.countByRoomIdAndStatus(room.getRoomId(), AgreementStatus.PENDING_TENANT_ACTION);
+            room.setPendingAgreementCount((int) pendingCount);
+        }
+
+        rooms.sort((r1, r2) -> Integer.compare(r1.getPendingAgreementCount(), r2.getPendingAgreementCount()));
+
+        return rooms;
     }
 
 //    @Transactional(readOnly = true)

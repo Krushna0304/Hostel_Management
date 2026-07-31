@@ -14,9 +14,11 @@ import {
 import { otherChargeService } from '../../services/otherChargeService'
 import CreateOtherChargeModal from '../../components/CreateOtherChargeModal'
 import OtherChargeDetailsModal from '../../components/OtherChargeDetailsModal'
+import OtherChargeHistoryModal from '../../components/OtherChargeHistoryModal'
 
 export default function OtherCharges() {
   const [charges, setCharges] = useState([])
+  const [tenantRows, setTenantRows] = useState([]) // New tenant-specific rows
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -25,6 +27,7 @@ export default function OtherCharges() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedCharge, setSelectedCharge] = useState(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [historyTenant, setHistoryTenant] = useState(null)
   const [stats, setStats] = useState({
     totalCharges: 0,
     totalAmount: 0,
@@ -44,11 +47,92 @@ export default function OtherCharges() {
       const response = await otherChargeService.getOwnerCharges()
       setCharges(response.data)
       calculateStats(response.data)
+      transformToTenantRows(response.data)
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load charges.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const transformToTenantRows = (chargesData) => {
+    const tenantMap = new Map()
+
+    chargesData.forEach(charge => {
+      if (charge.category === 'OTHER_CHARGE_TENANT') {
+        // For tenant-specific charges
+        const key = `${charge.tenantId || charge.tenantName}-${charge.roomNumber}`
+        if (!tenantMap.has(key)) {
+          tenantMap.set(key, {
+            tenantId: charge.tenantId,
+            tenantName: charge.tenantName,
+            hostelName: charge.hostelName || 'N/A',
+            roomNumber: charge.roomNumber,
+            charges: [],
+            totalCharges: 0,
+            pendingCharges: 0,
+            totalAmount: 0,
+            outstandingAmount: 0,
+            overdueAmount: 0
+          })
+        }
+        
+        const tenantRow = tenantMap.get(key)
+        tenantRow.charges.push(charge)
+        tenantRow.totalCharges += 1
+        tenantRow.totalAmount += charge.amount
+
+        if (charge.paymentStatus !== 'COMPLETED') {
+          tenantRow.pendingCharges += 1
+          tenantRow.outstandingAmount += charge.remainingAmount || charge.amount
+          
+          if (charge.dueDate && new Date(charge.dueDate) < new Date()) {
+            tenantRow.overdueAmount += charge.remainingAmount || charge.amount
+          }
+        }
+      } else if (charge.category === 'OTHER_CHARGE_ROOM' && charge.roomTenants) {
+        // For room-based charges, create entries for each tenant in the room
+        charge.roomTenants.forEach(roomTenant => {
+          const key = `${roomTenant.tenantId || roomTenant.tenantName}-${charge.roomNumber}`
+          if (!tenantMap.has(key)) {
+            tenantMap.set(key, {
+              tenantId: roomTenant.tenantId,
+              tenantName: roomTenant.tenantName,
+              hostelName: charge.hostelName || 'N/A',
+              roomNumber: charge.roomNumber,
+              charges: [],
+              totalCharges: 0,
+              pendingCharges: 0,
+              totalAmount: 0,
+              outstandingAmount: 0,
+              overdueAmount: 0
+            })
+          }
+          
+          const tenantRow = tenantMap.get(key)
+          // Add room charge with tenant's split amount
+          const tenantCharge = {
+            ...charge,
+            splitAmount: roomTenant.splitAmount,
+            tenantPaymentStatus: roomTenant.paymentStatus
+          }
+          tenantRow.charges.push(tenantCharge)
+          tenantRow.totalCharges += 1
+          tenantRow.totalAmount += roomTenant.splitAmount
+
+          if (roomTenant.paymentStatus !== 'COMPLETED') {
+            tenantRow.pendingCharges += 1
+            tenantRow.outstandingAmount += roomTenant.splitAmount
+            
+            if (charge.dueDate && new Date(charge.dueDate) < new Date()) {
+              tenantRow.overdueAmount += roomTenant.splitAmount
+            }
+          }
+        })
+      }
+    })
+
+    setTenantRows(Array.from(tenantMap.values()))
   }
 
   const calculateStats = (chargesData) => {
@@ -87,9 +171,18 @@ export default function OtherCharges() {
     fetchCharges()
   }
 
-  const handleViewDetails = (charge) => {
-    setSelectedCharge(charge)
-    setShowDetailsModal(true)
+  const handleCollect = (tenant) => {
+    const charge = tenant.charges?.find((item) => {
+      if (item.category === 'OTHER_CHARGE_ROOM') {
+        return item.roomTenants?.some((roomTenant) => roomTenant.tenantId === tenant.tenantId && roomTenant.paymentStatus !== 'COMPLETED')
+      }
+      return item.paymentStatus !== 'COMPLETED'
+    })
+
+    if (charge) {
+      setSelectedCharge(charge)
+      setShowDetailsModal(true)
+    }
   }
 
   const handleDeleteCharge = async (chargeId) => {
@@ -103,62 +196,43 @@ export default function OtherCharges() {
     }
   }
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      PENDING: { color: 'yellow', text: 'Pending' },
-      PARTIALLY_PAID: { color: 'blue', text: 'Partially Paid' },
-      COMPLETED: { color: 'green', text: 'Completed' },
-      OVERDUE: { color: 'red', text: 'Overdue' },
-      CANCELLED: { color: 'gray', text: 'Cancelled' }
+  const getStatusBadge = (tenant) => {
+    if (tenant.pendingCharges === 0) {
+      return <Badge color="green">All Paid</Badge>
     }
-    
-    const config = statusConfig[status] || statusConfig.PENDING
-    return <Badge color={config.color}>{config.text}</Badge>
+    if (tenant.overdueAmount > 0) {
+      return <Badge color="red">{tenant.pendingCharges} Overdue</Badge>
+    }
+    return <Badge color="yellow">{tenant.pendingCharges} Pending</Badge>
   }
 
-  const getCategoryBadge = (category) => {
-    const categoryConfig = {
-      OTHER_CHARGE_TENANT: { color: 'blue', text: 'Tenant Specific' },
-      OTHER_CHARGE_ROOM: { color: 'purple', text: 'Room Based' }
-    }
+  const filteredTenantRows = tenantRows.filter(tenant => {
+    const matchesSearch = tenant.tenantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         tenant.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         tenant.hostelName.toLowerCase().includes(searchQuery.toLowerCase())
     
-    const config = categoryConfig[category] || { color: 'gray', text: category }
-    return <Badge color={config.color}>{config.text}</Badge>
-  }
-
-  const filteredCharges = charges.filter(charge => {
-    const matchesSearch = charge.chargeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         charge.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         charge.tenantName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         charge.roomNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+    // For tenant filtering, we check if they have any charges matching the filters
+    const hasMatchingCharges = tenant.charges.some(charge => {
+      const matchesStatus = filterStatus === 'ALL' || 
+                           (filterStatus === 'PENDING' && charge.paymentStatus !== 'COMPLETED') ||
+                           (filterStatus === 'COMPLETED' && charge.paymentStatus === 'COMPLETED') ||
+                           charge.paymentStatus === filterStatus
+      
+      const matchesCategory = filterCategory === 'ALL' || charge.category === filterCategory
+      
+      return matchesStatus && matchesCategory
+    })
     
-    const matchesStatus = filterStatus === 'ALL' || charge.paymentStatus === filterStatus
-    const matchesCategory = filterCategory === 'ALL' || charge.category === filterCategory
-    
-    return matchesSearch && matchesStatus && matchesCategory
+    return matchesSearch && hasMatchingCharges
   })
 
   const fmt = (amount) => `₹${(amount || 0).toLocaleString()}`
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Other Charges" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-        <Skeleton className="h-96" />
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader 
-        title="Other Charges" 
-        subtitle="Manage additional charges for tenants and rooms"
+        title="Other Charges Collection" 
+        subtitle="Per-tenant breakdown of additional charges, payment status, and outstanding amounts"
         action={
           <Button onClick={handleCreateCharge} className="bg-sky-600 hover:bg-sky-700 text-white">
             + Create New Charge
@@ -202,14 +276,14 @@ export default function OtherCharges() {
         />
       </div>
 
-      {/* Filters */}
+      {/* Search and Filter */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <input
                 type="text"
-                placeholder="Search charges, tenants, rooms..."
+                placeholder="Search by tenant name, hostel, or room..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -241,122 +315,98 @@ export default function OtherCharges() {
         </CardContent>
       </Card>
 
-      {/* Charges List */}
-      {filteredCharges.length === 0 ? (
-        <EmptyState
-          title="No charges found"
-          description={charges.length === 0 ? 
-            "Create your first other charge to get started. You can charge specific tenants or entire rooms." : 
-            "No charges match your current filters."
-          }
-          action={charges.length === 0 ? (
-            <Button onClick={handleCreateCharge} className="bg-sky-600 hover:bg-sky-700 text-white">
-              + Create Your First Charge
-            </Button>
-          ) : null}
-        />
-      ) : (
-        <div className="grid gap-4">
-          {filteredCharges.map((charge) => (
-            <Card key={charge.chargeId} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-slate-900">{charge.chargeName}</h3>
-                      {getStatusBadge(charge.paymentStatus)}
-                      {getCategoryBadge(charge.category)}
-                      {charge.installmentEnabled && (
-                        <Badge color="blue">Installments</Badge>
-                      )}
-                    </div>
-                    
-                    {charge.description && (
-                      <p className="text-sm text-slate-600 mb-3">{charge.description}</p>
-                    )}
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-slate-500">Amount:</span>
-                        <div className="font-medium">{fmt(charge.amount)}</div>
-                      </div>
-                      
-                      {charge.paymentStatus !== 'COMPLETED' && (
-                        <div>
-                          <span className="text-slate-500">Remaining:</span>
-                          <div className="font-medium text-orange-600">{fmt(charge.remainingAmount)}</div>
-                        </div>
-                      )}
-                      
-                      <div>
-                        <span className="text-slate-500">Target:</span>
-                        <div className="font-medium">
-                          {charge.category === 'OTHER_CHARGE_TENANT' ? (
-                            <span>👤 {charge.tenantName}</span>
+      {/* Tenant-specific Table */}
+      <Card>
+        <CardHeader className="border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-slate-950">
+            Other charges collection
+          </h2>
+          <p className="text-sm text-slate-600 mt-1">
+            Per-tenant other charges dues, outstanding and overdue amounts.
+          </p>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-6 space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 rounded-lg" />
+              ))}
+            </div>
+          ) : !tenantRows.length ? (
+            <EmptyState
+              title="No tenants with charges"
+              description="Additional charges will appear here when you create them for tenants."
+            />
+          ) : filteredTenantRows.length === 0 ? (
+            <EmptyState
+              title="No matching tenants"
+              description="Try adjusting your search query or filters to find what you're looking for."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
+                    <th className="pb-3 pr-4 pl-6">Tenant</th>
+                    <th className="pb-3 pr-4">Hostel / Room</th>
+                    <th className="pb-3 pr-4">Pending charges</th>
+                    <th className="pb-3 pr-4">Outstanding</th>
+                    <th className="pb-3 pr-4">Overdue amount</th>
+                    <th className="pb-3 text-center pr-6">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTenantRows.map((tenant) => (
+                    <tr key={`${tenant.tenantId}-${tenant.roomNumber}`} className="hover:bg-slate-50">
+                      <td className="py-3 pr-4 pl-6">
+                        <p className="font-semibold text-slate-950">{tenant.tenantName}</p>
+                      </td>
+                      <td className="py-3 pr-4 text-slate-600">
+                        {tenant.hostelName} · Room {tenant.roomNumber}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {tenant.pendingCharges > 0 ? (
+                          <Badge variant="warning">{tenant.pendingCharges} pending</Badge>
+                        ) : (
+                          <Badge variant="success">All paid</Badge>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 font-semibold text-slate-950">
+                        {Number(tenant.outstandingAmount) > 0 ? fmt(tenant.outstandingAmount) : '—'}
+                      </td>
+                      <td className="py-3 pr-4 font-semibold text-red-600">
+                        {Number(tenant.overdueAmount) > 0 ? fmt(tenant.overdueAmount) : '—'}
+                      </td>
+                      <td className="py-3 text-center pr-6">
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setHistoryTenant(tenant)}
+                          >
+                            History
+                          </Button>
+                          {Number(tenant.outstandingAmount) > 0 ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleCollect(tenant)}
+                            >
+                              Collect
+                            </Button>
                           ) : (
-                            <span>🏠 Room {charge.roomNumber} ({charge.roomTenants?.length || 0} tenants)</span>
+                            <span className="text-sm text-slate-500">No pending</span>
                           )}
                         </div>
-                      </div>
-                      
-                      {charge.dueDate && (
-                        <div>
-                          <span className="text-slate-500">Due Date:</span>
-                          <div className="font-medium">
-                            {new Date(charge.dueDate).toLocaleDateString()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {charge.installmentEnabled && charge.installments && (
-                      <div className="mt-3 p-3 bg-slate-50 rounded-lg">
-                        <div className="text-sm text-slate-600 mb-2">
-                          Installments: {charge.installments.filter(i => i.paymentStatus === 'COMPLETED').length} / {charge.installments.length} completed
-                        </div>
-                        <div className="flex gap-1">
-                          {charge.installments.map((installment, idx) => (
-                            <div
-                              key={idx}
-                              className={`w-4 h-2 rounded-full ${
-                                installment.paymentStatus === 'COMPLETED' ? 'bg-green-500' :
-                                installment.paymentStatus === 'PARTIALLY_PAID' ? 'bg-yellow-500' :
-                                installment.isOverdue ? 'bg-red-500' : 'bg-slate-300'
-                              }`}
-                              title={`Installment ${installment.installmentNumber}: ${installment.paymentStatus}`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex gap-2 ml-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewDetails(charge)}
-                    >
-                      View Details
-                    </Button>
-                    
-                    {charge.paymentStatus !== 'COMPLETED' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteCharge(charge.chargeId)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        Delete
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Modals */}
       {showCreateModal && (
@@ -371,6 +421,13 @@ export default function OtherCharges() {
           charge={selectedCharge}
           onClose={() => setShowDetailsModal(false)}
           onUpdate={fetchCharges}
+        />
+      )}
+
+      {historyTenant && (
+        <OtherChargeHistoryModal
+          tenant={historyTenant}
+          onClose={() => setHistoryTenant(null)}
         />
       )}
 

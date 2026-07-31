@@ -32,4 +32,16 @@ public interface RoomRepository extends JpaRepository<Room, UUID> {
             @Param("hostelId") UUID hostelId,
             @Param("floorId") UUID floorId,
             @Param("roomType") RoomType roomType);
+
+    /**
+     * Enhanced Settlement System - Find rooms by hostel and active status for overbooking manager
+     */
+    List<Room> findByHostel_HostelIdAndIsActive(UUID hostelId, Boolean isActive);
+    
+    /**
+     * Find rooms by hostel entity and active status
+     */
+    @Query("SELECT r FROM Room r WHERE r.hostel = :hostel AND r.isActive = :isActive")
+    List<Room> findByHostelAndIsActive(@Param("hostel") com.krunity.HostelManagment.model.Hostel hostel, 
+                                      @Param("isActive") Boolean isActive);
 }

@@ -528,9 +528,10 @@ public class AgreementService {
     }
 
     private RoomAllotmentStatus resolveAllotmentStatus(LocalDate startDate) {
-        return startDate.isAfter(LocalDate.now())
-                ? RoomAllotmentStatus.UPCOMING
-                : RoomAllotmentStatus.ACTIVE;
+//        return startDate.isAfter(LocalDate.now())
+//                ? RoomAllotmentStatus.UPCOMING
+//                : RoomAllotmentStatus.ACTIVE;
+        return RoomAllotmentStatus.UPCOMING;
     }
 
     private String buildTenantPlanId(Agreement agreement, User tenant) {

@@ -37,15 +37,20 @@ public class OtherChargeController {
      * Create a new other charge (Owner only)
      */
     @PostMapping
-    public ResponseEntity<OtherChargeResponse> createOtherCharge(
+    public ResponseEntity<?> createOtherCharge(
             @Valid @RequestBody OtherChargeRequest request,
             Authentication authentication) {
 
         UUID ownerId = ApplicationContext.getUser().getUserId();
         log.info("Creating other charge: {} by owner: {}", request.getChargeName(), ownerId);
 
-        OtherChargeResponse response = otherChargeService.createOtherCharge(request, ownerId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        try{
+            OtherChargeResponse response = otherChargeService.createOtherCharge(request, ownerId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        }catch (Exception e){
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        }
     }
 
     /**
@@ -364,9 +369,12 @@ class OwnerOtherChargeController {
         
         UUID ownerId = userService.getCurrentUserId(authentication);
         log.info("Owner {} creating new charge: {}", ownerId, request.getChargeName());
-        
-        OtherChargeResponse response = otherChargeService.createOtherCharge(request, ownerId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        try{
+            OtherChargeResponse response = otherChargeService.createOtherCharge(request, ownerId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }catch(Exception e){
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     /**

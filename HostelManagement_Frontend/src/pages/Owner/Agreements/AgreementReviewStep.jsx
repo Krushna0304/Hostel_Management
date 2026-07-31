@@ -409,7 +409,6 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                     <div>Payment Mode: {formData.plan.paymentModel.mode}</div>
                     <div>Payment Timing: {formData.plan.paymentModel.paymentTiming}</div>
                     <div>Number of Installments: {formData.plan.paymentModel.installments}</div>
-                    <div>Due Day of Month: {formData.plan.paymentModel.dueDayOfMonth}</div>
                   </>
                 )}
               </div>
@@ -448,8 +447,7 @@ export default function AgreementReviewStep({ prevStep, formData }) {
                 <div className="text-xs space-y-1">
                   <div>Grace Period: {formData.plan.latePaymentPolicy.gracePeriodDays} days</div>
                   {formData.plan.latePaymentPolicy.penalty && (
-                    <div>Penalty: {formData.plan.latePaymentPolicy.penalty.type} - ₹{formData.plan.latePaymentPolicy.penalty.amount}
-                    {formData.plan.latePaymentPolicy.penalty.maxAmount && ` (Max: ₹${formData.plan.latePaymentPolicy.penalty.maxAmount})`}</div>
+                    <div>Penalty: {formData.plan.latePaymentPolicy.penalty.type} - ₹{formData.plan.latePaymentPolicy.penalty.amount}</div>
                   )}
                 </div>
               </div>

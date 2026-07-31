@@ -14,6 +14,5 @@ import java.math.BigDecimal;
 public class LatePaymentPenalty {
     private String type; // PER_DAY, FIXED
     private BigDecimal amount;
-    private BigDecimal maxAmount;
 }
 

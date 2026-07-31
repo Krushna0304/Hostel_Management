@@ -140,6 +140,12 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
         ...room,
         roomNumber: room.roomName || room.roomNumber,
       }));
+      // 6.3.4: Sort rooms by pending action count (ascending) — least-busy rooms first
+      availableRooms.sort((a, b) => {
+        const aPending = a.tenantActionPendingCount ?? a.pendingAgreementCount ?? 0;
+        const bPending = b.tenantActionPendingCount ?? b.pendingAgreementCount ?? 0;
+        return aPending - bPending;
+      });
       setRooms(availableRooms);
     } catch (err) {
       console.error("Failed to fetch available rooms", err);
@@ -448,20 +454,31 @@ export default function AgreementFormStep({ nextStep, prevStep, formData, setFor
               {roomsEmptyMessage}
             </p>
           ) : (
-            <select
-              name="roomId"
-              value={agreementData.roomId}
-              onChange={handleChange}
-              disabled={roomsLoaded}
-              className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="">Select a room</option>
-              {rooms.map((room) => (
-                <option key={room.roomId} value={room.roomId}>
-                  Room {room.roomNumber} ({room.availableBeds} bed{room.availableBeds === 1 ? '' : 's'} available)
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                name="roomId"
+                value={agreementData.roomId}
+                onChange={handleChange}
+                disabled={roomsLoaded}
+                className="w-full px-4 py-2 border rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">Select a room</option>
+                {rooms.map((room) => {
+                  const pending = room.tenantActionPendingCount ?? room.pendingAgreementCount ?? 0;
+                  const pendingLabel = pending > 0 ? ` · ${pending} pending action${pending > 1 ? 's' : ''}` : '';
+                  return (
+                    <option key={room.roomId} value={room.roomId}>
+                      Room {room.roomNumber} ({room.availableBeds} bed{room.availableBeds === 1 ? '' : 's'} available{pendingLabel})
+                    </option>
+                  );
+                })}
+              </select>
+              {rooms.length > 0 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  ↑ Sorted by availability — rooms with fewer pending actions shown first
+                </p>
+              )}
+            </>
           )}
           {errors.roomId && <p className="text-red-500 text-sm">{errors.roomId}</p>}
         </div>

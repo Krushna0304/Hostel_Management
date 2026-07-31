@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { tenantService } from '../../services/agreementService'
 import {
   Alert,
@@ -15,6 +16,10 @@ import {
 import PaymentModal from '../../components/PaymentModal'
 import PaymentHistoryModal from '../../components/PaymentHistoryModal'
 import SettlementRequestModal from '../../components/SettlementRequestModal'
+import ExtensionRequestModal from '../../components/ExtensionRequestModal'
+import ExtensionPaymentModal from '../../components/ExtensionPaymentModal'
+import extensionService from '../../services/extensionService'
+import ExtensionStatusTracker from '../../components/ExtensionStatusTracker'
 
 const statusVariant = (status) => {
   switch (status) {
@@ -343,8 +348,8 @@ function AgreementModal({ agreement, onClose }) {
                         <p className="font-semibold text-slate-950">{plan.paymentModel.installments}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500">Due Day</p>
-                        <p className="font-semibold text-slate-950">Day {plan.paymentModel.dueDayOfMonth} of month</p>
+                        <p className="text-xs text-slate-500">Payment Timing</p>
+                        <p className="font-semibold text-slate-950">{plan.paymentModel.paymentTiming}</p>
                       </div>
                     </>
                   )}
@@ -383,9 +388,7 @@ function AgreementModal({ agreement, onClose }) {
                   <div className="text-sm text-yellow-800 space-y-1">
                     <p>Grace Period: {plan.latePaymentPolicy.gracePeriodDays} days</p>
                     {plan.latePaymentPolicy.penalty && (
-                      <p>Penalty: {plan.latePaymentPolicy.penalty.type} · ₹{plan.latePaymentPolicy.penalty.amount}
-                        {plan.latePaymentPolicy.penalty.maxAmount && ` (Max: ₹${plan.latePaymentPolicy.penalty.maxAmount})`}
-                      </p>
+                      <p>Penalty: {plan.latePaymentPolicy.penalty.type} · ₹{plan.latePaymentPolicy.penalty.amount}</p>
                     )}
                   </div>
                 </div>
@@ -486,6 +489,7 @@ function AgreementModal({ agreement, onClose }) {
 }
 
 export default function TenantDashboard() {
+  const navigate = useNavigate()
   const [dashboard, setDashboard] = useState(null)
   const [schedule, setSchedule] = useState(null)
   const [agreement, setAgreement] = useState(null)
@@ -496,6 +500,10 @@ export default function TenantDashboard() {
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showSettlementModal, setShowSettlementModal] = useState(false)
+  const [showExtensionModal, setShowExtensionModal] = useState(false)
+  const [extensionRequests, setExtensionRequests] = useState([])
+  const [showExtensionPaymentModal, setShowExtensionPaymentModal] = useState(false)
+  const [selectedExtensionRequest, setSelectedExtensionRequest] = useState(null)
   const [confirmingLeft, setConfirmingLeft] = useState(false)
   const [showConfirmLeft, setShowConfirmLeft] = useState(false)
   const [markingArrival, setMarkingArrival] = useState(false)
@@ -517,6 +525,17 @@ export default function TenantDashboard() {
       setDashboard(dashRes.data)
       setSchedule(schedRes.data)
       setAgreement(agreementRes.data)
+
+      // Load extension requests to show payment prompt for approved ones
+      try {
+        const extData = await extensionService.getTenantExtensionRequests()
+        const requests = Array.isArray(extData)
+          ? extData
+          : extData?.extensionRequests || extData?.data || []
+        setExtensionRequests(requests)
+      } catch {
+        // Non-critical — don't block the rest of the dashboard
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load dashboard.')
     } finally {
@@ -532,6 +551,12 @@ export default function TenantDashboard() {
   const handlePaymentSuccess = async () => {
     setShowPaymentModal(false)
     setSelectedPayment(null)
+    await fetchData()
+  }
+
+  const handleExtensionPaymentSuccess = async () => {
+    setShowExtensionPaymentModal(false)
+    setSelectedExtensionRequest(null)
     await fetchData()
   }
 
@@ -629,6 +654,21 @@ export default function TenantDashboard() {
 
   return (
     <div className="space-y-8">
+      {/* 6.4.3 Notification bell banner — quick link to plan expiry notifications */}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => navigate('/tenant-portal/plan-expiry-notifications')}
+          className="relative flex items-center gap-2 px-4 py-2 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700 transition-colors shadow-sm"
+          title="View plan expiry notifications"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          Notifications
+        </button>
+      </div>
+
       {/* Agreement Modal */}
       {showAgreement && (
         <AgreementModal agreement={agreement} onClose={() => setShowAgreement(false)} />
@@ -720,6 +760,28 @@ export default function TenantDashboard() {
         />
       )}
 
+      {/* Extension Request Modal */}
+      {showExtensionModal && agreement && (
+        <ExtensionRequestModal
+          isOpen={showExtensionModal}
+          onClose={() => setShowExtensionModal(false)}
+          agreement={agreement}
+          onSuccess={fetchData}
+        />
+      )}
+
+      {/* Extension Payment Modal */}
+      {showExtensionPaymentModal && selectedExtensionRequest && (
+        <ExtensionPaymentModal
+          extensionRequest={selectedExtensionRequest}
+          onClose={() => {
+            setShowExtensionPaymentModal(false)
+            setSelectedExtensionRequest(null)
+          }}
+          onSuccess={handleExtensionPaymentSuccess}
+        />
+      )}
+
       <PageHeader
         eyebrow="Tenant workspace"
         title="Your payment dashboard"
@@ -734,11 +796,18 @@ export default function TenantDashboard() {
               />
             )}
             {agreement && agreement.status === 'ACTIVE' && (
-              <Button
-                label="Request Settlement"
-                variant="outline"
-                onClick={() => setShowSettlementModal(true)}
-              />
+              <>
+                <Button
+                  label="Request Settlement"
+                  variant="outline"
+                  onClick={() => setShowSettlementModal(true)}
+                />
+                <Button
+                  label="Request Extension"
+                  variant="secondary"
+                  onClick={() => setShowExtensionModal(true)}
+                />
+              </>
             )}
             {dashboard?.allotmentStatus === 'UPCOMING' &&
               new Date().toLocaleDateString('en-CA') >= (dashboard.startDate?.slice(0, 10) ?? '') && (
@@ -784,6 +853,42 @@ export default function TenantDashboard() {
           </p>
         </div>
       )}
+
+      {/* Approved extension requests awaiting payment */}
+      {extensionRequests
+        .filter((req) => req.status === 'APPROVED' || req.status === 'PAYMENT_PENDING')
+        .map((req) => (
+          <div
+            key={req.requestId}
+            className="rounded-[1.75rem] border border-green-200 bg-green-50 p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-green-700">Extension Approved — Payment Required</p>
+              <p className="mt-1 text-sm text-green-800">
+                Your extension request for <strong>Room {req.roomNumber}</strong> has been approved.
+                {req.totalAmount != null && (
+                  <> Pay <strong>₹{Number(req.totalAmount).toLocaleString()}</strong> to activate your new accommodation period.</>
+                )}
+              </p>
+              {req.extensionPeriod && (
+                <p className="mt-1 text-xs text-green-700">Extension period: {req.extensionPeriod}</p>
+              )}
+              {req.expiresAt && (
+                <p className="mt-1 text-xs text-red-600">
+                  Payment deadline: {new Date(req.expiresAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+            <Button
+              label="Pay Now"
+              onClick={() => {
+                setSelectedExtensionRequest(req)
+                setShowExtensionPaymentModal(true)
+              }}
+            />
+          </div>
+        ))
+      }
 
       {/* Room info banner */}
       {dashboard && (
@@ -889,6 +994,25 @@ export default function TenantDashboard() {
                 </table>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Extension request status tracker — shown when tenant has any requests */}
+      {extensionRequests.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Extension Requests"
+            description="Track the status of your room extension requests."
+          />
+          <CardContent>
+            <ExtensionStatusTracker
+              requests={extensionRequests}
+              onPayNow={(req) => {
+                setSelectedExtensionRequest(req)
+                setShowExtensionPaymentModal(true)
+              }}
+            />
           </CardContent>
         </Card>
       )}

@@ -123,6 +123,46 @@ export const roomService = {
   getRoomById: (hostelId, roomId) => apiClient.get(`/hostels/${hostelId}/rooms/${roomId}`),
   updateRoom: (hostelId, roomId, roomData) => apiClient.put(`/hostels/${hostelId}/rooms/${roomId}`, roomData),
   deleteRoom: (hostelId, roomId) => apiClient.delete(`/hostels/${hostelId}/rooms/${roomId}`),
+
+  // Enhanced Room Availability API endpoints (Task 6.3.1)
+  
+  // Get room availability with bed counts and overbooking support
+  getRoomAvailability: (roomId) => {
+    return apiClient.get(`/api/v1/rooms/${roomId}/availability`);
+  },
+
+  // Search available rooms sorted by TenantActionPending count
+  searchAvailableRooms: (hostelId) => {
+    return apiClient.get(`/api/v1/rooms/search/available?hostelId=${hostelId}`);
+  },
+
+  // Get room dropdown data with pending action counts
+  getRoomDropdownData: (hostelId) => {
+    return apiClient.get(`/api/v1/rooms/dropdown?hostelId=${hostelId}`);
+  },
+
+  // Get rooms sorted by pending actions (ascending)
+  getRoomsSortedByPendingActions: (hostelId) => {
+    return apiClient.get(`/api/v1/rooms/sorted/by-pending-actions?hostelId=${hostelId}`);
+  },
+
+  // Allocate room with overbooking support
+  allocateRoom: (roomId, allocationData) => {
+    return apiClient.post(`/api/v1/rooms/${roomId}/allocate`, allocationData);
+  },
+
+  // Filter rooms by type, availability, status, and date range
+  filterRooms: (hostelId, floorId, filters = {}) => {
+    const params = new URLSearchParams()
+    if (filters.roomType && filters.roomType !== 'ALL') params.append('roomType', filters.roomType)
+    if (filters.minAvailableBeds !== undefined && filters.minAvailableBeds !== null)
+      params.append('minAvailableBeds', filters.minAvailableBeds)
+    if (filters.isActive !== undefined && filters.isActive !== null && filters.isActive !== 'ALL')
+      params.append('isActive', filters.isActive)
+    if (filters.startDate) params.append('startDate', filters.startDate)
+    if (filters.endDate) params.append('endDate', filters.endDate)
+    return apiClient.get(`/hostels/${hostelId}/${floorId}/rooms/filter?${params.toString()}`)
+  },
 };
 
 export default { hostelService, floorService, roomService }

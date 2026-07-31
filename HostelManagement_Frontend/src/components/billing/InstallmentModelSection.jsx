@@ -5,6 +5,11 @@ const selectCls = inputCls
 
 export default function InstallmentModelSection({ form, set }) {
   const isNotFixed = form.duration?.durationType === 'NOT_FIXED'
+  
+  // Validation: Check if minimum stay exceeds total duration
+  const totalDuration = form.duration?.value || 0
+  const minimumStay = form.duration?.minimumStayMonths || 0
+  const isMinStayInvalid = !isNotFixed && minimumStay > totalDuration && totalDuration > 0
 
   const handleDurationTypeChange = (e) => {
     const durationType = e.target.value
@@ -17,6 +22,26 @@ export default function InstallmentModelSection({ form, set }) {
       // Restore sensible defaults for fixed
       set('duration.value', 12)
       set('paymentModel.installments', 3)
+    }
+  }
+
+  const handleTotalDurationChange = (e) => {
+    const newValue = Number(e.target.value)
+    set('duration.value', newValue)
+    
+    // Auto-adjust minimum stay if it becomes invalid
+    if (minimumStay > newValue && newValue > 0) {
+      set('duration.minimumStayMonths', newValue)
+    }
+  }
+
+  const handleMinStayChange = (e) => {
+    const newValue = Number(e.target.value)
+    // Don't allow setting minimum stay greater than total duration
+    if (!isNotFixed && totalDuration > 0 && newValue > totalDuration) {
+      set('duration.minimumStayMonths', totalDuration)
+    } else {
+      set('duration.minimumStayMonths', newValue)
     }
   }
 
@@ -54,7 +79,7 @@ export default function InstallmentModelSection({ form, set }) {
                 <NumericInput
                   className={inputCls}
                   value={form.duration?.value || ''}
-                  onChange={e => set('duration.value', Number(e.target.value))}
+                  onChange={handleTotalDurationChange}
                   placeholder="12"
                   min="1"
                   max="60"
@@ -73,18 +98,23 @@ export default function InstallmentModelSection({ form, set }) {
           )}
           <Field label={isNotFixed ? 'Minimum Stay (months)' : 'Min Stay (months)'}>
             <NumericInput
-              className={inputCls}
+              className={`${inputCls} ${isMinStayInvalid ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : ''}`}
               value={form.duration?.minimumStayMonths || ''}
-              onChange={e => set('duration.minimumStayMonths', Number(e.target.value))}
+              onChange={handleMinStayChange}
               placeholder="3"
               min="1"
-              max="60"
+              max={isNotFixed ? "60" : totalDuration || "60"}
             />
+            {isMinStayInvalid && (
+              <p className="text-xs text-red-600 mt-1">
+                Minimum stay cannot exceed total duration ({totalDuration} months)
+              </p>
+            )}
           </Field>
         </div>
 
         {/* Payment Model */}
-        <div className={`grid gap-3 ${isNotFixed ? 'grid-cols-2' : 'grid-cols-3'}`}>
+        <div className={`grid gap-3 ${isNotFixed ? 'grid-cols-1' : 'grid-cols-2'}`}>
           {!isNotFixed && (
             <Field label="Number of Installments">
               <NumericInput
@@ -106,16 +136,6 @@ export default function InstallmentModelSection({ form, set }) {
               <option value="PREPAID">Prepaid</option>
               <option value="POSTPAID">Postpaid</option>
             </select>
-          </Field>
-          <Field label="Due Day of Month">
-            <NumericInput
-              className={inputCls}
-              value={form.paymentModel?.dueDayOfMonth || ''}
-              onChange={e => set('paymentModel.dueDayOfMonth', Number(e.target.value))}
-              placeholder="5"
-              min="1"
-              max="28"
-            />
           </Field>
         </div>
 

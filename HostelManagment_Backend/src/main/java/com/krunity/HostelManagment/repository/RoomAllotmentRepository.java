@@ -74,6 +74,10 @@ public interface RoomAllotmentRepository extends JpaRepository<RoomAllotment, UU
             Room room,
             Collection<RoomAllotmentStatus> statuses);
 
+    List<RoomAllotment> findByRoom_RoomIdAndRoomAllotmentStatusNot(
+            UUID room,
+            RoomAllotmentStatus statuse);
+
     List<RoomAllotment> findByRoom(Room room);
 
     Optional<RoomAllotment> findByTenant_UserIdAndRoomAllotmentStatus(UUID tenantId, RoomAllotmentStatus status);
@@ -81,6 +85,7 @@ public interface RoomAllotmentRepository extends JpaRepository<RoomAllotment, UU
     List<RoomAllotment> findByTenant_UserIdAndRoomAllotmentStatusIn(UUID tenantId, Collection<RoomAllotmentStatus> statuses);
 
     List<RoomAllotment> findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatus(UUID ownerId, RoomAllotmentStatus status);
+    List<RoomAllotment> findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatusNot(UUID ownerId, RoomAllotmentStatus status);
 
     List<RoomAllotment> findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatusIn(UUID ownerId, Collection<RoomAllotmentStatus> statuses);
 
@@ -112,4 +117,38 @@ public interface RoomAllotmentRepository extends JpaRepository<RoomAllotment, UU
     Optional<RoomAllotment> findByAllotmentIdAndOwner(
             @Param("allotmentId") UUID allotmentId,
             @Param("ownerId") UUID ownerId);
+
+    // Enhanced Settlement System Methods
+    Optional<RoomAllotment> findByAgreementId(String agreementId);
+
+    List<RoomAllotment> findByTenantAndRoomAllotmentStatusIn(User tenant, Collection<RoomAllotmentStatus> statuses);
+
+    @Query("""
+        SELECT a FROM RoomAllotment a
+        WHERE a.room = :room
+          AND a.roomAllotmentStatus IN :statuses
+          AND (a.endDate IS NULL OR a.endDate >= CURRENT_DATE)
+        """)
+    List<RoomAllotment> findActiveAllotmentsByRoom(@Param("room") Room room, 
+                                                  @Param("statuses") Collection<RoomAllotmentStatus> statuses);
+
+    @Query("""
+        SELECT COUNT(a) FROM RoomAllotment a
+        WHERE a.room.roomId = :roomId
+          AND a.roomAllotmentStatus IN ('UPCOMING', 'ACTIVE')
+          AND (a.endDate IS NULL OR a.endDate >= CURRENT_DATE)
+        """)
+    Long countActiveAllotmentsByRoomId(@Param("roomId") UUID roomId);
+
+    // Plan Expiry Notification Methods
+    @Query("""
+        SELECT a FROM RoomAllotment a
+        WHERE a.roomAllotmentStatus IN ('ACTIVE', 'UPCOMING')
+          AND a.endDate IS NOT NULL
+          AND a.endDate BETWEEN :startDate AND :endDate
+        ORDER BY a.endDate ASC
+        """)
+    List<RoomAllotment> findActiveAllotmentsExpiringBetween(
+        @Param("startDate") LocalDate startDate,
+        @Param("endDate") LocalDate endDate);
 }

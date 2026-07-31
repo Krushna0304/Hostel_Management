@@ -137,6 +137,111 @@ const settlementService = {
   async ownerConfirmLeft(allotmentId) {
     const response = await apiClient.post(`/api/settlements/allotments/${allotmentId}/confirm-left`);
     return response.data;
+  },
+
+  // Create settlement transaction (Enhanced Settlement System)
+  async createSettlementTransaction(transactionData) {
+    try {
+      console.log('Creating settlement transaction with data:', transactionData);
+      
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in again.');
+      }
+      
+      const response = await apiClient.post('/api/v1/settlements/transactions', transactionData);
+      console.log('Settlement transaction created successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating settlement transaction:', error);
+      throw error;
+    }
+  },
+
+  // Approve settlement with room availability update (Owner action - Enhanced Settlement System)
+  async approveSettlementWithRoomUpdate(settlementId, approvalData) {
+    try {
+      console.log(`Approving settlement ${settlementId} with room update:`, approvalData);
+
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in again.');
+      }
+
+      const response = await apiClient.put(`/api/v1/settlements/${settlementId}/approve-with-room-update`, approvalData);
+      console.log('Settlement approval with room update successful:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error approving settlement with room update:', error);
+      throw error;
+    }
+  },
+
+  // Get settlements that have transaction data (Enhanced Settlement System)
+  async getSettlementsWithTransactions() {
+    try {
+      const response = await apiClient.get('/api/v1/settlements/with-transactions');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting settlements with transactions:', error);
+      throw error;
+    }
+  },
+
+  // Get early settlement requests for owner (Enhanced Settlement System)
+  async getEarlySettlementRequests() {
+    try {
+      const response = await apiClient.get('/api/v1/settlements/early-settlements');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting early settlement requests:', error);
+      throw error;
+    }
+  },
+
+  // Request early settlement (Enhanced Settlement System)
+  async requestEarlySettlement(earlySettlementData) {
+    try {
+      console.log('Requesting early settlement with data:', earlySettlementData);
+      
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in again.');
+      }
+      
+      const response = await apiClient.post('/api/v1/settlements/early-settlement', earlySettlementData);
+      console.log('Early settlement request successful:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error requesting early settlement:', error);
+      
+      // Handle specific error cases similar to regular settlement
+      if (error.response?.status === 403) {
+        console.log('Got 403 error, but early settlement might have been created');
+        
+        // Wait a moment and try to fetch settlements to see if it was created
+        try {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const settlements = await this.getTenantSettlements();
+          
+          // Check if an early settlement with this agreement ID was just created
+          const recentSettlement = settlements.find(s => 
+            s.agreementId === earlySettlementData.agreementId && 
+            s.earlyExit === true &&
+            new Date(s.createdAt) > new Date(Date.now() - 30000) // Created in last 30 seconds
+          );
+          
+          if (recentSettlement) {
+            console.log('Early settlement was actually created successfully:', recentSettlement);
+            return recentSettlement;
+          }
+        } catch (fetchError) {
+          console.error('Error checking if early settlement was created:', fetchError);
+        }
+      }
+      
+      throw error;
+    }
   }
 };
 

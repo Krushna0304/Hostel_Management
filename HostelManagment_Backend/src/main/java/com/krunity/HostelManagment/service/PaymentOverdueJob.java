@@ -86,11 +86,6 @@ public class PaymentOverdueJob {
             lateFee = policy.getPenalty().getAmount().longValue();
         }
 
-        // Cap at maxAmount if defined
-        if (policy.getPenalty().getMaxAmount() != null) {
-            lateFee = Math.min(lateFee, policy.getPenalty().getMaxAmount().longValue());
-        }
-
         schedule.setLateFeeApplied(lateFee);
     }
 }

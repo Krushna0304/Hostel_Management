@@ -46,6 +46,29 @@ public class RoomAllotment {
     @JoinColumn(name = "deposit_transaction_id", nullable = false)
     private Transaction depositTransactionId;
 
+    // ─── NEW: Extension Tracking ─────────────────────────────────────────────
+
+    /**
+     * Reference to the extension request that created this allotment (if applicable)
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "extension_request_id")
+    private ExtendAllotmentRequest extensionRequest;
+
+    /**
+     * Flag indicating if this allotment is an extension of a previous one
+     */
+    @Column(name = "is_extension", columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean isExtension = false;
+
+    /**
+     * Reference to the parent allotment if this is an extension
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_allotment_id")
+    private RoomAllotment parentAllotment;
+
     // ─── Schedule ─────────────────────────────────────────────────────────────
 
     @Column(name = "allotment_date")
@@ -70,6 +93,20 @@ public class RoomAllotment {
     @Enumerated(EnumType.STRING)
     @Column(name = "room_allotment_status", nullable = false)
     private RoomAllotmentStatus roomAllotmentStatus;
+
+    // ─── NEW: Settlement Task Management ─────────────────────────────────────
+
+    /**
+     * Type of settlement task pending (if status is SETTLEMENT_TASK)
+     */
+    @Column(name = "settlement_task_type", length = 50)
+    private String settlementTaskType;
+
+    /**
+     * Additional metadata for settlement tasks (JSON format)
+     */
+    @Column(name = "settlement_task_data", columnDefinition = "TEXT")
+    private String settlementTaskData;
 
     // ─── Settlement flags ─────────────────────────────────────────────────────
 
@@ -126,4 +163,134 @@ public class RoomAllotment {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    // ─── NEW: Enhanced Business Logic ────────────────────────────────────────
+
+    /**
+     * Checks if this allotment requires tenant action
+     */
+    public boolean requiresTenantAction() {
+        return RoomAllotmentStatus.tenantActionPendingStatuses().contains(roomAllotmentStatus);
+    }
+
+    /**
+     * Checks if this allotment is in settlement workflow
+     */
+    public boolean isInSettlementWorkflow() {
+        return RoomAllotmentStatus.settlementInProgressStatuses().contains(roomAllotmentStatus);
+    }
+
+    /**
+     * Checks if extension requests are allowed from current status
+     */
+    public boolean canRequestExtension() {
+        return RoomAllotmentStatus.extensionRequestableStatuses().contains(roomAllotmentStatus);
+    }
+
+    /**
+     * Gets the allocation priority for room allocation calculations
+     */
+    public int getAllocationPriority() {
+        return roomAllotmentStatus.getAllocationPriority();
+    }
+
+    /**
+     * Checks if this is an extended allotment
+     */
+    public boolean isExtendedAllotment() {
+        return isExtension && parentAllotment != null;
+    }
+
+    /**
+     * Gets the extension chain depth (0 for original, 1 for first extension, etc.)
+     */
+    public int getExtensionDepth() {
+        if (!isExtension || parentAllotment == null) {
+            return 0;
+        }
+        return 1 + parentAllotment.getExtensionDepth();
+    }
+
+    /**
+     * Gets the root allotment in the extension chain
+     */
+    public RoomAllotment getRootAllotment() {
+        if (!isExtension || parentAllotment == null) {
+            return this;
+        }
+        return parentAllotment.getRootAllotment();
+    }
+
+    /**
+     * Checks if settlement task is pending
+     */
+    public boolean hasSettlementTaskPending() {
+        return roomAllotmentStatus == RoomAllotmentStatus.SETTLEMENT_TASK &&
+               settlementTaskType != null && !settlementTaskType.trim().isEmpty();
+    }
+
+    /**
+     * Sets settlement task information
+     */
+    public void setSettlementTask(String taskType, String taskData) {
+        this.settlementTaskType = taskType;
+        this.settlementTaskData = taskData;
+        if (roomAllotmentStatus != RoomAllotmentStatus.SETTLEMENT_TASK) {
+            updateStatus(RoomAllotmentStatus.SETTLEMENT_TASK, "SYSTEM");
+        }
+    }
+
+    /**
+     * Clears settlement task information
+     */
+    public void clearSettlementTask() {
+        this.settlementTaskType = null;
+        this.settlementTaskData = null;
+    }
+
+    /**
+     * Updates status with validation and audit trail
+     */
+    public void updateStatus(RoomAllotmentStatus newStatus, String changedBy) {
+        if (!roomAllotmentStatus.canTransitionTo(newStatus)) {
+            throw new IllegalStateException(
+                String.format("Invalid status transition from %s to %s for allotment %s", 
+                    roomAllotmentStatus, newStatus, allotmentId)
+            );
+        }
+        
+        this.roomAllotmentStatus = newStatus;
+        this.lastStatusChangedBy = changedBy;
+        this.lastStatusChangedAt = LocalDateTime.now();
+
+        // Clear settlement task if transitioning away from SETTLEMENT_TASK
+        if (newStatus != RoomAllotmentStatus.SETTLEMENT_TASK) {
+            clearSettlementTask();
+        }
+    }
+
+    /**
+     * Creates an extension of this allotment
+     */
+    public RoomAllotment createExtension(ExtendAllotmentRequest extensionRequest, 
+                                       String newAgreementId, 
+                                       TenantPaymentPlan newPaymentPlan,
+                                       Transaction newDepositTransaction) {
+        return RoomAllotment.builder()
+                .room(this.room)
+                .tenant(this.tenant)
+                .agreementId(newAgreementId)
+                .paymentPlanId(newPaymentPlan)
+                .depositTransactionId(newDepositTransaction)
+                .extensionRequest(extensionRequest)
+                .isExtension(true)
+                .parentAllotment(this)
+                .startDate(extensionRequest.getExtensionStartDate())
+                .endDate(extensionRequest.getExtensionEndDate())
+                .noticePeriodMonths(this.noticePeriodMonths) // Inherit from parent
+                .roomAllotmentStatus(RoomAllotmentStatus.UPCOMING)
+                .lastStatusChangedBy("SYSTEM")
+                .lastStatusChangedAt(LocalDateTime.now())
+                .build();
+    }
 }

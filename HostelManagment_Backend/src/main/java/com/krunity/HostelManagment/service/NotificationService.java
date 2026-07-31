@@ -397,6 +397,98 @@ public class NotificationService {
         }
     }
     
+    /**
+     * Generic notification sending method with template variables
+     * Supports both SMS and email notifications based on configuration
+     */
+    public void sendNotification(User recipient, Object notificationType, String title, String message, java.util.Map<String, String> variables) {
+        if (recipient == null) {
+            log.warn("Cannot send notification: recipient is null");
+            return;
+        }
+
+        try {
+            // Process message template with variables if provided
+            String processedMessage = processMessageTemplate(message, variables);
+            String processedTitle = processMessageTemplate(title, variables);
+
+            // Send SMS notification (always attempt if phone number exists)
+            if (recipient.getPhoneNumber() != null && !recipient.getPhoneNumber().trim().isEmpty()) {
+                try {
+                    sendSms(recipient.getPhoneNumber(), processedMessage);
+                    log.info("📱 Notification sent via SMS to {} ({}): {}", 
+                            recipient.getDisplayName(), 
+                            recipient.getPhoneNumber(),
+                            processedTitle);
+                } catch (Exception e) {
+                    log.error("Failed to send SMS notification to {}: {}", 
+                            recipient.getPhoneNumber(), e.getMessage());
+                }
+            }
+
+            // Send email notification if enabled and email available
+            if (emailEnabled && mailSender != null) {
+                String email = getRecipientEmail(recipient);
+                if (email != null && !email.trim().isEmpty()) {
+                    try {
+                        sendEmail(email, processedTitle, processedMessage);
+                        log.info("📧 Notification sent via email to {} ({}): {}", 
+                                recipient.getDisplayName(), 
+                                email,
+                                processedTitle);
+                    } catch (Exception e) {
+                        log.error("Failed to send email notification to {}: {}", 
+                                email, e.getMessage());
+                    }
+                }
+            }
+
+            log.info("✅ Notification processed for user {} - Type: {} - Title: {}", 
+                    recipient.getDisplayName(), 
+                    notificationType != null ? notificationType.toString() : "UNKNOWN",
+                    processedTitle);
+
+        } catch (Exception e) {
+            log.error("Failed to send notification to user {}: {}", 
+                    recipient.getDisplayName(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Process message template by replacing variables
+     */
+    private String processMessageTemplate(String template, java.util.Map<String, String> variables) {
+        if (template == null || variables == null || variables.isEmpty()) {
+            return template != null ? template : "";
+        }
+
+        String processedMessage = template;
+        for (java.util.Map.Entry<String, String> entry : variables.entrySet()) {
+            String placeholder = "{" + entry.getKey() + "}";
+            if (entry.getValue() != null) {
+                processedMessage = processedMessage.replace(placeholder, entry.getValue());
+            }
+        }
+        return processedMessage;
+    }
+
+    /**
+     * Get recipient email address based on available fields
+     */
+    private String getRecipientEmail(User recipient) {
+        // Try username first (if it's an email)
+        if (recipient.getUsername() != null && recipient.getUsername().contains("@")) {
+            return recipient.getUsername();
+        }
+
+        // For demo purposes, generate email from username
+        if (recipient.getUsername() != null) {
+            return recipient.getUsername() + "@example.com";
+        }
+
+        return null;
+    }
+
     public void sendSettlementRejectionNotification(User tenant, com.krunity.HostelManagment.model.SettlementRequest settlement) {
         if (!emailEnabled || mailSender == null) {
             log.info("{}", "Email notification disabled. Would send settlement rejection notification to tenant: " + tenant.getUsername());

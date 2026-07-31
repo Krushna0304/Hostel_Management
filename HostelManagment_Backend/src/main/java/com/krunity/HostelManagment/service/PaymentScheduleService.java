@@ -85,11 +85,18 @@ public class PaymentScheduleService {
 
         List<PaymentRequestSchedule> schedules = new ArrayList<>();
         for (int i = 0; i < totalInstallments; i++) {
-            // Calculate due date based on installment interval (months per installment)
-            LocalDate monthBase = startDate.plusMonths(i * monthsPerInstallment);
-            // Clamp day to last day of month (e.g. Feb 28/29)
-            int day = Math.min(dueDayOfMonth, monthBase.lengthOfMonth());
-            LocalDate dueDate = monthBase.withDayOfMonth(day);
+            LocalDate dueDate;
+            
+            if (i == 0) {
+                // First installment: use agreement start date directly
+                dueDate = startDate;
+            } else {
+                // Subsequent installments: use configured due day of month
+                LocalDate monthBase = startDate.plusMonths(i * monthsPerInstallment);
+                // Clamp day to last day of month (e.g. Feb 28/29)
+                int day = Math.min(dueDayOfMonth, monthBase.lengthOfMonth());
+                dueDate = monthBase.withDayOfMonth(day);
+            }
 
             // First installment is marked as COMPLETED (paid during activation)
             boolean isFirstInstallment = (i == 0);

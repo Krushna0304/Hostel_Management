@@ -12,6 +12,8 @@ import com.krunity.HostelManagment.service.RoomService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,14 +34,32 @@ public class RoomController {
 
 
     @GetMapping
-    public ResponseEntity<?> getAllRooms(@PathVariable String hostelId,@PathVariable String floorId) {
+    public ResponseEntity<?> getAllRooms(@PathVariable String hostelId, @PathVariable String floorId) {
         try{
-            var roomResponses = roomService.getAllRooms(hostelId,floorId);
+            var roomResponses = roomService.getAllRooms(hostelId,floorId,null,null);
             return ResponseEntity.status(200).body(roomResponses);
         }catch (Exception e){
             return ResponseEntity.status(500).body("Error getting rooms from hostel: " + e.getMessage());
         }
     }
+
+    @GetMapping("/filter")
+    public ResponseEntity<?> getRoomsByFilter(
+            @PathVariable String hostelId,
+            @PathVariable String floorId,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate,
+            @RequestParam(name = "minAvailableBeds", required = false, defaultValue = "0") Long minBedCnt,
+            @RequestParam(name = "roomType", required = false) String roomType,
+            @RequestParam(name = "isActive", required = false) Boolean roomStatus) {
+        try{
+            var roomResponses = roomService.getRoomsByFilter(hostelId,floorId,startDate,endDate,minBedCnt,roomType,roomStatus);
+            return ResponseEntity.status(200).body(roomResponses);
+        }catch (Exception e){
+            return ResponseEntity.status(500).body("Error getting rooms from hostel: " + e.getMessage());
+        }
+    }
+
 
     @GetMapping("/active")
     public ResponseEntity<?> getAllActiveRooms(@PathVariable String hostelId,@PathVariable String floorId,

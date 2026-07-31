@@ -1,0 +1,331 @@
+package com.krunity.HostelManagment.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.krunity.HostelManagment.dto.RoomAllocationResultDto;
+import com.krunity.HostelManagment.dto.RoomAvailabilityDto;
+import com.krunity.HostelManagment.exception.NotFoundException;
+import com.krunity.HostelManagment.service.RoomOverbookingManager;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.*;
+
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * Integration tests for RoomAllocationController
+ * Tests HTTP endpoints for room allocation and overbooking management
+ * 
+ * @author Kiro Enhanced Settlement System
+ */
+@WebMvcTest(RoomAllocationController.class)
+class RoomAllocationControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private RoomOverbookingManager roomOverbookingManager;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private UUID roomId;
+    private String agreementId;
+    private RoomAvailabilityDto mockAvailability;
+    private RoomAllocationResultDto mockSuccessResult;
+    private RoomAllocationResultDto mockFailureResult;
+
+    @BeforeEach
+    void setUp() {
+        roomId = UUID.randomUUID();
+        agreementId = "AGREEMENT_123";
+
+        // Mock availability DTO
+        mockAvailability = RoomAvailabilityDto.builder()
+                .roomId(roomId)
+                .roomNumber("A-101")
+                .totalBedCapacity(10)
+                .currentOccupancy(7)
+                .tenantActionPendingCount(2)
+                .actualAvailableBeds(3)
+                .overbookingDetected(false)
+                .allocationStatus(RoomAvailabilityDto.AllocationStatus.AVAILABLE)
+                .upcomingDepartures(Collections.emptyList())
+                .build();
+
+        // Mock successful allocation result
+        mockSuccessResult = RoomAllocationResultDto.createSuccessful(
+                UUID.randomUUID(), 8, true, 10, 8, 2);
+
+        // Mock failure allocation result
+        mockFailureResult = RoomAllocationResultDto.createFailed(
+                "Room capacity exceeded", 10, 12, 1, Arrays.asList(UUID.randomUUID()));
+    }
+
+    @Test
+    void getRoomAvailability_ValidRoomId_ShouldReturnAvailability() throws Exception {
+        // Given
+        when(roomOverbookingManager.getRoomAvailability(roomId)).thenReturn(mockAvailability);
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/rooms/{roomId}/availability", roomId))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.roomId").value(roomId.toString()))
+                .andExpect(jsonPath("$.roomNumber").value("A-101"))
+                .andExpect(jsonPath("$.totalBedCapacity").value(10))
+                .andExpect(jsonPath("$.currentOccupancy").value(7))
+                .andExpect(jsonPath("$.tenantActionPendingCount").value(2))
+                .andExpect(jsonPath("$.actualAvailableBeds").value(3))
+                .andExpect(jsonPath("$.overbookingDetected").value(false))
+                .andExpect(jsonPath("$.allocationStatus").value("AVAILABLE"));
+
+        verify(roomOverbookingManager).getRoomAvailability(roomId);
+    }
+
+    @Test
+    void getRoomAvailability_RoomNotFound_ShouldReturn500() throws Exception {
+        // Given
+        when(roomOverbookingManager.getRoomAvailability(roomId))
+                .thenThrow(new NotFoundException("Room not found"));
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/rooms/{roomId}/availability", roomId))
+                .andExpect(status().isInternalServerError());
+
+        verify(roomOverbookingManager).getRoomAvailability(roomId);
+    }
+
+    @Test
+    void getRoomAvailability_OverBookedRoom_ShouldReturnOverbookingStatus() throws Exception {
+        // Given: Overbooked room
+        RoomAvailabilityDto overbookedAvailability = RoomAvailabilityDto.builder()
+                .roomId(roomId)
+                .roomNumber("B-201")
+                .totalBedCapacity(8)
+                .currentOccupancy(12)
+                .tenantActionPendingCount(1)
+                .actualAvailableBeds(0)
+                .overbookingDetected(true)
+                .allocationStatus(RoomAvailabilityDto.AllocationStatus.OVERBOOKED)
+                .upcomingDepartures(Collections.emptyList())
+                .build();
+
+        when(roomOverbookingManager.getRoomAvailability(roomId)).thenReturn(overbookedAvailability);
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/rooms/{roomId}/availability", roomId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overbookingDetected").value(true))
+                .andExpect(jsonPath("$.allocationStatus").value("OVERBOOKED"))
+                .andExpect(jsonPath("$.actualAvailableBeds").value(0))
+                .andExpect(jsonPath("$.currentOccupancy").value(12));
+    }
+
+    @Test
+    void processRoomAllocation_SuccessfulAllocation_ShouldReturn200() throws Exception {
+        // Given
+        RoomAllocationController.AllocationRequest request = new RoomAllocationController.AllocationRequest(
+                agreementId, UUID.randomUUID(), LocalDateTime.now());
+        
+        when(roomOverbookingManager.allocateRoom(roomId, agreementId)).thenReturn(mockSuccessResult);
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/allocate", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ALLOCATED"))
+                .andExpect(jsonPath("$.allocationOrder").value(8))
+                .andExpect(jsonPath("$.bedAssigned").value(true))
+                .andExpect(jsonPath("$.overbookingStatus").value("WITHIN_CAPACITY"));
+
+        verify(roomOverbookingManager).allocateRoom(roomId, agreementId);
+    }
+
+    @Test
+    void processRoomAllocation_FailedAllocation_ShouldReturn409() throws Exception {
+        // Given
+        RoomAllocationController.AllocationRequest request = new RoomAllocationController.AllocationRequest(
+                agreementId, UUID.randomUUID(), LocalDateTime.now());
+        
+        when(roomOverbookingManager.allocateRoom(roomId, agreementId)).thenReturn(mockFailureResult);
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/allocate", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.bedAssigned").value(false))
+                .andExpect(jsonPath("$.failureReason").value("Room capacity exceeded"))
+                .andExpect(jsonPath("$.suggestedAlternatives").isArray());
+
+        verify(roomOverbookingManager).allocateRoom(roomId, agreementId);
+    }
+
+    @Test
+    void processRoomAllocation_WaitlistedAllocation_ShouldReturn200() throws Exception {
+        // Given: Waitlisted allocation result
+        RoomAllocationResultDto waitlistResult = RoomAllocationResultDto.createWaitlisted(
+                UUID.randomUUID(), 15, 10, 13, 1);
+
+        RoomAllocationController.AllocationRequest request = new RoomAllocationController.AllocationRequest(
+                agreementId, UUID.randomUUID(), LocalDateTime.now());
+        
+        when(roomOverbookingManager.allocateRoom(roomId, agreementId)).thenReturn(waitlistResult);
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/allocate", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("WAITLISTED"))
+                .andExpect(jsonPath("$.allocationOrder").value(15))
+                .andExpect(jsonPath("$.bedAssigned").value(false))
+                .andExpect(jsonPath("$.overbookingStatus").value("WAITLIST_REQUIRED"));
+
+        verify(roomOverbookingManager).allocateRoom(roomId, agreementId);
+    }
+
+    @Test
+    void processRoomAllocation_InvalidRequest_ShouldReturn400() throws Exception {
+        // Given: Invalid request (missing agreementId)
+        RoomAllocationController.AllocationRequest request = new RoomAllocationController.AllocationRequest(
+                "", UUID.randomUUID(), LocalDateTime.now());
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/allocate", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(roomOverbookingManager, never()).allocateRoom(any(), any());
+    }
+
+    @Test
+    void processRoomAllocation_SystemError_ShouldReturn500() throws Exception {
+        // Given
+        RoomAllocationController.AllocationRequest request = new RoomAllocationController.AllocationRequest(
+                agreementId, UUID.randomUUID(), LocalDateTime.now());
+        
+        when(roomOverbookingManager.allocateRoom(roomId, agreementId))
+                .thenThrow(new RuntimeException("Database connection error"));
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/allocate", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("ALLOCATION_ERROR"))
+                .andExpect(jsonPath("$.message").value(containsString("Database connection error")));
+
+        verify(roomOverbookingManager).allocateRoom(roomId, agreementId);
+    }
+
+    @Test
+    void handleAllocationFailure_ValidRequest_ShouldReturn200() throws Exception {
+        // Given
+        RoomAllocationController.AllocationFailureRequest request = 
+                new RoomAllocationController.AllocationFailureRequest(
+                        agreementId, "Room capacity exceeded", UUID.randomUUID());
+        
+        doNothing().when(roomOverbookingManager)
+                .handleAllocationFailure(roomId, agreementId, "Room capacity exceeded");
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/allocation-failure", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Allocation failure handled successfully"))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(roomOverbookingManager).handleAllocationFailure(roomId, agreementId, "Room capacity exceeded");
+    }
+
+    @Test
+    void handleAllocationFailure_InvalidRequest_ShouldReturn400() throws Exception {
+        // Given: Invalid request (missing reason)
+        RoomAllocationController.AllocationFailureRequest request = 
+                new RoomAllocationController.AllocationFailureRequest(agreementId, "", UUID.randomUUID());
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/rooms/{roomId}/allocation-failure", roomId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(roomOverbookingManager, never()).handleAllocationFailure(any(), any(), any());
+    }
+
+    @Test
+    void getRoomsWithOverbookingIssues_DefaultHours_ShouldReturnRoomList() throws Exception {
+        // Given
+        List<UUID> roomsWithIssues = Arrays.asList(
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        
+        when(roomOverbookingManager.getRoomsWithOverbookingIssues(24)).thenReturn(roomsWithIssues);
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/rooms/overbooking-issues"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(3));
+
+        verify(roomOverbookingManager).getRoomsWithOverbookingIssues(24);
+    }
+
+    @Test
+    void getRoomsWithOverbookingIssues_CustomHours_ShouldReturnRoomList() throws Exception {
+        // Given
+        List<UUID> roomsWithIssues = Arrays.asList(UUID.randomUUID());
+        
+        when(roomOverbookingManager.getRoomsWithOverbookingIssues(48)).thenReturn(roomsWithIssues);
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/rooms/overbooking-issues?hours=48"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+
+        verify(roomOverbookingManager).getRoomsWithOverbookingIssues(48);
+    }
+
+    @Test
+    void getRoomsWithOverbookingIssues_NoIssues_ShouldReturnEmptyList() throws Exception {
+        // Given
+        when(roomOverbookingManager.getRoomsWithOverbookingIssues(24)).thenReturn(Collections.emptyList());
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/rooms/overbooking-issues"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        verify(roomOverbookingManager).getRoomsWithOverbookingIssues(24);
+    }
+
+    @Test
+    void getRoomsWithOverbookingIssues_SystemError_ShouldReturn500() throws Exception {
+        // Given
+        when(roomOverbookingManager.getRoomsWithOverbookingIssues(24))
+                .thenThrow(new RuntimeException("Service unavailable"));
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/rooms/overbooking-issues"))
+                .andExpect(status().isInternalServerError());
+
+        verify(roomOverbookingManager).getRoomsWithOverbookingIssues(24);
+    }
+}

@@ -14,6 +14,15 @@ import {
   LoadingScreen,
 } from '../../../components/ui'
 
+const OTP_EXPIRY_SECONDS = 10 * 60
+
+const formatOtpCountdown = (seconds) => {
+  const safeSeconds = Math.max(0, seconds)
+  const minutes = Math.floor(safeSeconds / 60)
+  const remainingSeconds = safeSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
 export default function TenantActivatePage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
@@ -26,6 +35,8 @@ export default function TenantActivatePage() {
   const [otp, setOtp] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [otpMessage, setOtpMessage] = useState('')
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null)
+  const [otpSecondsRemaining, setOtpSecondsRemaining] = useState(0)
   const [sendingOtp, setSendingOtp] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [resetToken, setResetToken] = useState('')
@@ -35,10 +46,35 @@ export default function TenantActivatePage() {
   })
 
   useEffect(() => {
+    setOtp('')
+    setOtpSent(false)
+    setOtpMessage('')
+    setOtpExpiresAt(null)
+    setOtpSecondsRemaining(0)
     fetchAgreement()
     // Preload Razorpay since this is a payment page
     preloadRazorpay()
   }, [token])
+
+  useEffect(() => {
+    if (!otpExpiresAt) {
+      setOtpSecondsRemaining(0)
+      return undefined
+    }
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((otpExpiresAt.getTime() - Date.now()) / 1000))
+      setOtpSecondsRemaining(remaining)
+    }
+
+    updateCountdown()
+    const intervalId = window.setInterval(updateCountdown, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [otpExpiresAt])
+
+  const otpExpired = otpSent && otpExpiresAt ? otpSecondsRemaining <= 0 : false
+  const canResendOtp = !sendingOtp && (!otpSent || otpExpired)
 
   const fetchAgreement = async () => {
     try {
@@ -81,7 +117,7 @@ export default function TenantActivatePage() {
 
   const handlePayment = async () => {
     if (paymentMode === 'CASH') {
-      if (!otpSent) {
+      if (!otpSent || otpExpired) {
         setError('Please request OTP first by clicking "Send OTP to Owner".')
         return
       }
@@ -198,9 +234,11 @@ export default function TenantActivatePage() {
       setSendingOtp(true)
       setError('')
       setOtpMessage('')
+      setOtp('')
       
       const response = await apiClient.post(`/api/cash-payment-otp/send/${agreement.id}`)
       setOtpSent(true)
+      setOtpExpiresAt(new Date(Date.now() + OTP_EXPIRY_SECONDS * 1000))
       setOtpMessage(response.data.message || 'OTP sent to owner successfully')
     } catch (err) {
       const errorData = err?.response?.data
@@ -548,10 +586,6 @@ export default function TenantActivatePage() {
                               <span className="text-slate-600">Number of Installments:</span>
                               <span className="font-semibold">{agreement.planSnapshot.paymentModel.installments}</span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-slate-600">Due Day of Month:</span>
-                              <span className="font-semibold">Day {agreement.planSnapshot.paymentModel.dueDayOfMonth}</span>
-                            </div>
                           </>
                         )}
                       </div>
@@ -591,9 +625,7 @@ export default function TenantActivatePage() {
                         <div className="text-sm text-yellow-800 space-y-1">
                           <p>Grace Period: {agreement.planSnapshot.latePaymentPolicy.gracePeriodDays} days</p>
                           {agreement.planSnapshot.latePaymentPolicy.penalty && (
-                            <p>Penalty: {agreement.planSnapshot.latePaymentPolicy.penalty.type} - ₹{agreement.planSnapshot.latePaymentPolicy.penalty.amount}
-                            {agreement.planSnapshot.latePaymentPolicy.penalty.maxAmount && 
-                              ` (Maximum: ₹${agreement.planSnapshot.latePaymentPolicy.penalty.maxAmount})`}</p>
+                            <p>Penalty: {agreement.planSnapshot.latePaymentPolicy.penalty.type} - ₹{agreement.planSnapshot.latePaymentPolicy.penalty.amount}</p>
                           )}
                         </div>
                       </div>
@@ -737,6 +769,8 @@ export default function TenantActivatePage() {
                       setOtpSent(false)
                       setOtp('')
                       setOtpMessage('')
+                      setOtpExpiresAt(null)
+                      setOtpSecondsRemaining(0)
                     }}
                     className={`rounded-3xl border p-5 text-left transition ${
                       paymentMode === 'ONLINE' ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-white'
@@ -752,6 +786,8 @@ export default function TenantActivatePage() {
                       setOtpSent(false)
                       setOtp('')
                       setOtpMessage('')
+                      setOtpExpiresAt(null)
+                      setOtpSecondsRemaining(0)
                     }}
                     className={`rounded-3xl border p-5 text-left transition ${
                       paymentMode === 'CASH' ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-white'
@@ -774,18 +810,36 @@ export default function TenantActivatePage() {
                       </ol>
                     </div>
 
-                    {!otpSent ? (
-                      <Button
-                        label="Send OTP to Owner"
-                        onClick={handleSendOtp}
-                        loading={sendingOtp}
-                        fullWidth
-                        variant="secondary"
-                      />
-                    ) : (
+                    {otpSent ? (
                       <Alert tone="success" title="OTP Sent">
-                        {otpMessage}
+                        <div className="space-y-2">
+                          <p>{otpMessage || 'OTP sent to owner successfully.'}</p>
+                          <p className="font-medium text-emerald-700">
+                            {otpExpired
+                              ? 'OTP expired. You can resend it now.'
+                              : `OTP expires in ${formatOtpCountdown(otpSecondsRemaining)}.`}
+                          </p>
+                        </div>
                       </Alert>
+                    ) : null}
+
+                    <Button
+                      label={sendingOtp
+                        ? 'Sending OTP...'
+                        : otpSent
+                          ? (otpExpired ? 'Resend OTP' : `Resend available in ${formatOtpCountdown(otpSecondsRemaining)}`)
+                          : 'Send OTP to Owner'}
+                      onClick={handleSendOtp}
+                      loading={sendingOtp}
+                      disabled={!canResendOtp}
+                      fullWidth
+                      variant="secondary"
+                    />
+
+                    {otpSent && !otpExpired && (
+                      <p className="text-center text-xs text-slate-500">
+                        You can resend the OTP after the timer reaches 00:00.
+                      </p>
                     )}
 
                     {otpSent && (

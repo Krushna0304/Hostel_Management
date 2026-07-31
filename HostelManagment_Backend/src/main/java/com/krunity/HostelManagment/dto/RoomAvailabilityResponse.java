@@ -17,11 +17,13 @@ public class RoomAvailabilityResponse {
     private String roomName;
     private Integer totalBeds;
     private Integer availableBeds;
+    private Integer pendingAgreementCount;
 
     public RoomAvailabilityResponse(UUID roomId, String roomName, Integer totalBeds, Long occupiedCount) {
         this.roomId = roomId;
         this.roomName = roomName;
         this.totalBeds = totalBeds;
         this.availableBeds = totalBeds - occupiedCount.intValue();
+        this.pendingAgreementCount = 0;
     }
 }

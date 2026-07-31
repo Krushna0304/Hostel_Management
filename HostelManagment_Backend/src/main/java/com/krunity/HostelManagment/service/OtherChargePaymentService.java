@@ -20,9 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -446,5 +444,22 @@ public class OtherChargePaymentService {
             log.error("Failed to get payment gateway for owner {}: {}", ownerId, e.getMessage());
             throw new RuntimeException("Failed to initialize payment gateway: " + e.getMessage(), e);
         }
+    }
+
+
+    public BigDecimal calculateOutstandingCharge(UUID tenantId){
+        Collection<PaymentStatus> statuses = Arrays.asList(PaymentStatus.PENDING, PaymentStatus.OVERDUE);
+        List<OtherChargePayment> charges = otherChargePaymentRepository.findByTenantIdAndStatusIn(tenantId,statuses);
+
+        return charges.stream() .map(charge -> charge.getAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public List<OtherChargePayment> getOutstandingCharge(UUID tenantId){
+        Collection<PaymentStatus> statuses = Arrays.asList(PaymentStatus.PENDING, PaymentStatus.OVERDUE);
+        List<OtherChargePayment> charges = otherChargePaymentRepository.findByTenantIdAndStatusIn(tenantId,statuses);
+
+        return charges;
+//        return null;
     }
 }

@@ -5,13 +5,35 @@ import { Alert } from './ui/Alert';
 import { Badge } from './ui/Badge';
 import settlementService from '../services/settlementService';
 import { useSuccessPopup } from '../hooks/useSuccessPopup';
+import SettlementRealTimeIndicator from './SettlementRealTimeIndicator';
+import useRealTimeSettlementUpdates from '../hooks/useRealTimeSettlementUpdates';
+
+const Section = ({ title, children, className = "" }) => (
+  <div className={`rounded-2xl border border-slate-200 ${className}`}>
+    <div className="px-4 py-3 bg-slate-50 rounded-t-2xl border-b border-slate-200">
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+    </div>
+    <div className="px-4 py-4 space-y-3">
+      {children}
+    </div>
+  </div>
+);
+
+const InfoRow = ({ label, value, className = "" }) => (
+  <div className={`flex justify-between items-start gap-4 ${className}`}>
+    <span className="text-sm text-slate-600 font-medium flex-shrink-0">{label}:</span>
+    <span className="text-sm text-slate-900 font-semibold text-right break-words">{value || 'Not specified'}</span>
+  </div>
+);
 
 const SettlementCalculationModal = ({
   isOpen,
   onClose,
   settlementId,
   settlement, // Add settlement object as prop
-  onSuccess
+  onSuccess,
+  userType = 'owner', // Add userType prop for real-time updates
+  enableRealTimeUpdates = false // Add toggle for real-time updates
 }) => {
   const [calculation, setCalculation] = useState(null);
 
@@ -29,6 +51,49 @@ const SettlementCalculationModal = ({
   const [error, setError] = useState('');
 
   const { showSuccess } = useSuccessPopup();
+
+  // Real-time updates for this settlement
+  const { 
+    getSettlementById, 
+    refresh: refreshRealTimeData,
+    connectionStatus,
+    lastUpdated: realTimeLastUpdated 
+  } = useRealTimeSettlementUpdates({
+    enabled: enableRealTimeUpdates && isOpen,
+    settlementIds: settlementId ? [settlementId] : [],
+    userType,
+    pollingInterval: 20000, // More frequent updates for active modal
+    onStatusChange: (change) => {
+      // Show notification for status changes
+      if (change.newStatus === 'COMPLETED') {
+        showSuccess(`Settlement ${change.settlementId.substring(0, 8)}... has been completed!`);
+        // Auto-close modal after completion
+        setTimeout(() => {
+          onSuccess?.();
+          onClose();
+        }, 2000);
+      } else if (change.newStatus === 'SETTLEMENT_DONE') {
+        showSuccess(`Settlement transaction completed for ${change.settlementId.substring(0, 8)}...`);
+      }
+      
+      // Refresh calculation data when status changes
+      if (settlementId === change.settlementId) {
+        fetchCalculation();
+      }
+    },
+    onTransactionUpdate: (update) => {
+      // Refresh calculation when transaction data changes
+      if (settlementId === update.settlementId) {
+        fetchCalculation();
+        showSuccess('Settlement calculation updated with latest data');
+      }
+    }
+  });
+
+  // Use real-time settlement data if available
+  const currentSettlement = enableRealTimeUpdates && settlementId 
+    ? getSettlementById(settlementId) || settlement
+    : settlement;
 
   useEffect(() => {
     if (isOpen && settlementId) {
@@ -115,6 +180,7 @@ const SettlementCalculationModal = ({
     const totalDeductions =
       calculation.outstandingRent +
       calculation.outstandingCharges +
+      calculation.outstandingElectricityBills +
       parseFloat(formData.damageCharges) +
       parseFloat(formData.cleaningCharges) +
       parseFloat(formData.otherDeductions);
@@ -132,28 +198,9 @@ const SettlementCalculationModal = ({
   // READ ONLY FLAG - Check both calculation status and settlement prop status
   const isCompleted =
     calculation?.status === 'COMPLETED' || 
-    settlement?.status === 'COMPLETED' ||
+    currentSettlement?.status === 'COMPLETED' ||
     calculation?.settledAt ||
-    settlement?.settledAt;
-
-  // Section component for consistent styling
-  const Section = ({ title, children, className = "" }) => (
-    <div className={`rounded-2xl border border-slate-200 ${className}`}>
-      <div className="px-4 py-3 bg-slate-50 rounded-t-2xl border-b border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-      </div>
-      <div className="px-4 py-4 space-y-3">
-        {children}
-      </div>
-    </div>
-  );
-
-  const InfoRow = ({ label, value, className = "" }) => (
-    <div className={`flex justify-between items-start gap-4 ${className}`}>
-      <span className="text-sm text-slate-600 font-medium flex-shrink-0">{label}:</span>
-      <span className="text-sm text-slate-900 font-semibold text-right break-words">{value || 'Not specified'}</span>
-    </div>
-  );
+    currentSettlement?.settledAt;
 
   if (!isOpen) return null;
 
@@ -173,6 +220,23 @@ const SettlementCalculationModal = ({
               )}
             </div>
             <p className="text-sm text-slate-600 mt-1">Agreement settlement details and calculation</p>
+            
+            {/* Real-time indicator */}
+            {enableRealTimeUpdates && settlementId && (
+              <div className="mt-2">
+                <SettlementRealTimeIndicator
+                  userType={userType}
+                  settlementIds={[settlementId]}
+                  onStatusChange={(change) => {
+                    if (change.newStatus === 'COMPLETED') {
+                      // Refresh calculation data when completed
+                      fetchCalculation();
+                    }
+                  }}
+                  className="text-sm"
+                />
+              </div>
+            )}
           </div>
           <div className="flex-shrink-0 ml-4">
             <button 
@@ -206,6 +270,7 @@ const SettlementCalculationModal = ({
               <Section title="📋 Agreement Details">
                 <InfoRow label="Tenant" value={calculation.tenantName} />
                 <InfoRow label="Room" value={calculation.roomNumber} />
+                <InfoRow label="Move Out Date" value={calculation.requestedEndDate} />
               </Section>
 
               {/* Financial Breakdown */}
@@ -213,13 +278,13 @@ const SettlementCalculationModal = ({
                 {/* Left Column - Existing Amounts */}
                 <Section title="💰 Existing Financial Summary">
                   <div className="flex justify-between items-start gap-4">
-                    <span className="text-sm text-slate-600 font-medium flex-shrink-0">Security Deposit:</span>
+                    <span className="text-sm text-slate-600 font-medium flex-shrink-0">Refundable Amount:</span>
                     <span className="text-sm font-semibold text-right text-green-600">
                       +₹{calculation.securityDeposit?.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-start gap-4">
-                    <span className="text-sm text-slate-600 font-medium flex-shrink-0">Outstanding Rent:</span>
+                    <span className="text-sm text-slate-600 font-medium flex-shrink-0">Outstanding Installments:</span>
                     <span className="text-sm font-semibold text-right text-red-600">
                       -₹{calculation.outstandingRent?.toLocaleString()}
                     </span>
@@ -228,6 +293,12 @@ const SettlementCalculationModal = ({
                     <span className="text-sm text-slate-600 font-medium flex-shrink-0">Outstanding Charges:</span>
                     <span className="text-sm font-semibold text-right text-red-600">
                       -₹{calculation.outstandingCharges?.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="text-sm text-slate-600 font-medium flex-shrink-0">Outstanding Electricity Bill:</span>
+                    <span className="text-sm font-semibold text-right text-red-600">
+                      -₹{calculation.outstandingElectricityBills?.toLocaleString()}
                     </span>
                   </div>
 

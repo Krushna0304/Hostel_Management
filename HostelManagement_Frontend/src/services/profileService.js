@@ -22,6 +22,14 @@ export const profileService = {
 
   /** Update displayName, phoneNumber, and optionally password */
   updateProfile: (username, data) => apiClient.patch(`/users/${username}/profile`, data),
+
+  /** Fetch current user's profile and return it (resolves with response.data) */
+  getCurrentProfile: async () => {
+    const username = getUsernameFromToken()
+    if (!username) throw new Error('Not authenticated')
+    const res = await apiClient.get(`/users/${username}`)
+    return res.data
+  },
 }
 
 export default profileService
