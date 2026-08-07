@@ -262,6 +262,7 @@ public class SettlementService {
 
         settlement.setOutstandingRent(outstandingRent);
         settlement.setOutstandingCharges(outstandingCharges);
+        settlement.setOutstandingElectricityBills(outstandingElectricityBills);
 
         BigDecimal totalDeductions = outstandingRent
                 .add(outstandingCharges)

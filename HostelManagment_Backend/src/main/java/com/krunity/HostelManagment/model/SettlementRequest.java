@@ -54,8 +54,6 @@ public class SettlementRequest {
     private LocalDate requestedEndDate;
 
     // Financial Summary
-    @Column(name = "security_deposit", precision = 10, scale = 2)
-    private BigDecimal securityDeposit;
 
     @Column(name = "outstanding_rent", precision = 10, scale = 2)
     @Builder.Default
@@ -64,6 +62,10 @@ public class SettlementRequest {
     @Column(name = "outstanding_charges", precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal outstandingCharges = BigDecimal.ZERO;
+
+    @Column(name = "outstanding_charges", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal outstandingElectricityBills = BigDecimal.ZERO;
 
     @Column(name = "damage_charges", precision = 10, scale = 2)
     @Builder.Default
@@ -76,10 +78,6 @@ public class SettlementRequest {
     @Column(name = "other_deductions", precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal otherDeductions = BigDecimal.ZERO;
-
-    @Column(name = "total_deductions", precision = 10, scale = 2)
-    @Builder.Default
-    private BigDecimal totalDeductions = BigDecimal.ZERO;
 
     @Column(name = "final_settlement_amount", precision = 10, scale = 2)
     private BigDecimal finalSettlementAmount;
@@ -98,9 +96,6 @@ public class SettlementRequest {
     @Column(name = "damage_description", length = 1000)
     private String damageDescription;
 
-    // Payment Reference (if settlement involves payment)
-    @Column(name = "payment_reference")
-    private String paymentReference;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)
@@ -110,19 +105,32 @@ public class SettlementRequest {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "settlement_requested_at")
+    private LocalDateTime settlementRequestedAt;
+
+    @Column(name = "settlement_approved_at")
+    private LocalDateTime settlementApprovedAt;
+
     @Column(name = "settled_at")
     private LocalDateTime settledAt;
 
-    // Enhanced Settlement System Fields
-    @Column(name = "settlement_transaction_data", columnDefinition = "TEXT")
-    private String settlementTransactionData;
+    @Column(name = "settlement_approved_by")
+    private UUID settlementApprovedBy;
 
     @Column(name = "early_settlement_requested")
     @Builder.Default
     private boolean earlySettlementRequested = false;
 
-    @Column(name = "settlement_approved_by")
-    private UUID settlementApprovedBy;
+    @Column(name = "room_availability_updated")
+    @Builder.Default
+    private boolean roomAvailabilityUpdated = false;
+
+
+    //unwanted fields
+
+    // Enhanced Settlement System Fields
+    @Column(name = "settlement_transaction_data", columnDefinition = "TEXT")
+    private String settlementTransactionData;
 
     @Column(name = "auto_settlement_eligible")
     @Builder.Default
@@ -131,18 +139,18 @@ public class SettlementRequest {
     @Column(name = "transaction_created_at")
     private LocalDateTime transactionCreatedAt;
 
-    @Column(name = "settlement_requested_at")
-    private LocalDateTime settlementRequestedAt;
+    // Payment Reference (if settlement involves payment) (what is the use of this)
+    @Column(name = "payment_reference")
+    private String paymentReference;
 
-    @Column(name = "settlement_approved_at")
-    private LocalDateTime settlementApprovedAt;
-
-    @Column(name = "room_availability_updated")
-    @Builder.Default
-    private boolean roomAvailabilityUpdated = false;
+    @Column(name = "security_deposit", precision = 10, scale = 2)
+    private BigDecimal securityDeposit;
 
     // Business Methods
-    
+    @Column(name = "total_deductions", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal totalDeductions = BigDecimal.ZERO;
+
     /**
      * Updates the status of the settlement request
      */

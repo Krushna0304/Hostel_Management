@@ -1,5 +1,6 @@
 package com.krunity.HostelManagment.controller;
 
+import com.krunity.HostelManagment.Mapper.SettlementMapper;
 import com.krunity.HostelManagment.dto.SettlementApprovalDto;
 import com.krunity.HostelManagment.dto.SettlementCalculationDto;
 import com.krunity.HostelManagment.dto.SettlementRequestDto;
@@ -79,7 +80,7 @@ public class SettlementController {
             log.info("Settlement request created successfully with ID: {}", settlement.getSettlementId());
             
             // Convert to DTO to avoid Hibernate lazy loading serialization issues
-            SettlementResponseDto responseDto = com.krunity.HostelManagment.Mapper.SettlementMapper.toResponseDto(settlement);
+            SettlementResponseDto responseDto = SettlementMapper.toResponseDto(settlement);
             return ResponseEntity.ok(responseDto);
         } catch (Exception e) {
             log.error("Error creating settlement request: ", e);

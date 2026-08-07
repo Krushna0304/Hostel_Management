@@ -141,7 +141,7 @@ This document outlines the implementation tasks for the Enhanced Settlement and 
     - [x] 5.2.4 Room dropdown with pending action counts
     - [x] 5.2.5 Sorting by TenantActionPending count
 
-- [x] 6.1 Settlement Transaction Components - Create frontend components for settlement transactions (Frontend Developer, 8 hours, Dependencies: 2.3)
+- [ x] 6.1 Settlement Transaction Components - Create frontend components for settlement transactions (Frontend Developer, 8 hours, Dependencies: 2.3)
   - **Status**: Not Started
   - **Description**: Create frontend components for settlement transactions
   - **Acceptance Criteria**:
