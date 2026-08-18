@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -46,6 +47,22 @@ public class AllotmentService {
         RoomAllotment saved = roomAllotmentRepository.save(allotment);
         log.info("Allotment {} marked ACTIVE by tenant {}", allotmentId, tenantId);
         return saved;
+    }
+
+
+    @Transactional
+    public boolean markEndDate(UUID allotmentId, UUID tenantId,LocalDate endDate) {
+
+        try{
+            RoomAllotment allotment = loadAndVerifyTenant(allotmentId, tenantId);
+            allotment.setEndDate(endDate);
+            roomAllotmentRepository.save(allotment);
+            log.info("Allotment {} marked endDate by tenant {}", allotmentId, tenantId);
+            return true;
+        }catch(Exception exception){
+            log.info("Allotment {} marked endDate Error Occurs by tenant {}", allotmentId, tenantId);
+            return false;
+        }
     }
 
     // ─── Owner marks tenant arrival (UPCOMING → ACTIVE) ──────────────────────

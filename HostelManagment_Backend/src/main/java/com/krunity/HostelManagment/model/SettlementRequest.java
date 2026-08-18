@@ -63,7 +63,7 @@ public class SettlementRequest {
     @Builder.Default
     private BigDecimal outstandingCharges = BigDecimal.ZERO;
 
-    @Column(name = "outstanding_charges", precision = 10, scale = 2)
+    @Column(name = "outstanding_electricity_bills", precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal outstandingElectricityBills = BigDecimal.ZERO;
 

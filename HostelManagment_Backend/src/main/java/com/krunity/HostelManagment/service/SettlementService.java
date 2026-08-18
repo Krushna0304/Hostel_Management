@@ -74,6 +74,10 @@ public class SettlementService {
     @Autowired
     private RoomAllotmentStatusTransitionValidator transitionValidator;
 
+
+    @Autowired
+    private AllotmentService allotmentService;
+
     @Transactional
     public SettlementRequest initiateSettlement(SettlementRequestDto requestDto, UUID tenantId) {
         log.info("Initiating settlement request for agreement: {} by tenant: {}", requestDto.getAgreementId(), tenantId);
@@ -324,14 +328,18 @@ public class SettlementService {
         settlement.setSettledAt(LocalDateTime.now());
         settlement = settlementRepository.save(settlement);
 
-        // Update agreement status to settled
+        // Update agreement status to settled and endDate 
         Agreement agreement = agreementRepository.findById(settlement.getAgreementId())
                 .orElseThrow(() -> new NotFoundException("Agreement not found"));
         agreement.setStatus(AgreementStatus.SETTLED);
+        agreement.setEndDate(settlement.getRequestedEndDate());
         agreementRepository.save(agreement);
 
         // Transition allotment → ON_NOTICE_PERIOD now that payment is done
         transitionAllotmentToOnNoticePeriod(settlement);
+        allotmentService.markEndDate(settlementId, userId, settlement.getRequestedEndDate());
+        // Mark outstanding items as PAID (included in settlement) or CANCELLED (future/excluded)
+        finalizeOutstandingPaymentsOnSettlementComplete(settlement, agreement);
 
         finalizeAllotmentOnSettlementComplete(settlement);
 
@@ -599,6 +607,191 @@ public class SettlementService {
                             allotment.getAllotmentId(), allotment.isEarlyExit());
                 });
     }
+
+    // ─── Settlement finalisation: mark items PAID or CANCELLED ──────────────
+
+    /**
+     * After a settlement is completed, stamps every outstanding payment item that
+     * was factored into the settlement calculation as {@code COMPLETED} (i.e. the
+     * outstanding balance is absorbed by the settlement). Every item that falls
+     * <em>outside</em> the settlement window (future installments, future charges,
+     * electricity bills for a different room, etc.) is stamped {@code CANCELLED} so
+     * they no longer appear as open debts.
+     *
+     * <p>The three buckets mirror the three amounts computed in
+     * {@code approveSettlement()}:
+     * <ol>
+     *   <li>Rent installments – {@code calculateOutstandingRent()}</li>
+     *   <li>Other charges / charge-payment shares – {@code calculateOutstandingCharges()}</li>
+     *   <li>Electricity payment shares – {@code calculateOutstandingElectricityBills()}</li>
+     * </ol>
+     */
+    private void finalizeOutstandingPaymentsOnSettlementComplete(
+            SettlementRequest settlement, Agreement agreement) {
+
+        LocalDate settlementDate = settlement.getRequestedEndDate();
+        UUID tenantId = settlement.getTenant().getUserId();
+
+        log.info("Finalising outstanding payments for settlement {} (date={})", 
+                settlement.getSettlementId(), settlementDate);
+
+        finalizeInstallmentsOnSettlement(settlement.getAgreementId(), settlementDate);
+        finalizeOtherChargesOnSettlement(tenantId, settlementDate);
+        finalizeElectricityPaymentsOnSettlement(agreement, settlementDate);
+    }
+
+    /**
+     * Marks rent installments that were <em>included</em> in the settlement
+     * (due on or before {@code settlementDate} and not already terminal) as
+     * {@code CANCELLED} — the debt is absorbed into the settlement amount.
+     * Installments due <em>after</em> the settlement date are also cancelled
+     * because the tenancy ends on that date.
+     */
+    private void finalizeInstallmentsOnSettlement(String agreementId, LocalDate settlementDate) {
+        Optional<TenantPaymentPlan> planOpt = paymentPlanRepository.findByAgreementId(agreementId);
+        if (planOpt.isEmpty()) {
+            log.debug("No payment plan found for agreement {}, skipping installment finalisation", agreementId);
+            return;
+        }
+
+        List<PaymentRequestSchedule> schedules =
+                paymentRequestScheduleRepository.findByTenantPaymentPlan(planOpt.get());
+
+        List<PaymentRequestSchedule> toUpdate = new ArrayList<>();
+
+        for (PaymentRequestSchedule schedule : schedules) {
+            // Already in a terminal state – leave as-is
+            if (isInstallmentTerminal(schedule.getPaymentStatus())) {
+                continue;
+            }
+
+            if (schedule.getDueDate() != null && !schedule.getDueDate().isAfter(settlementDate)) {
+                // Included in the settlement calculation → mark CANCELLED
+                // (the outstanding balance was rolled into the settlement amount)
+                schedule.setPaymentStatus(com.krunity.HostelManagment.enums.TransactionStatus.CANCELLED);
+                log.debug("Installment #{} (due {}) absorbed into settlement – marked CANCELLED",
+                        schedule.getInstallmentNumber(), schedule.getDueDate());
+            } else {
+                // Future installment that will never become due → CANCELLED
+                schedule.setPaymentStatus(com.krunity.HostelManagment.enums.TransactionStatus.CANCELLED);
+                log.debug("Future installment #{} (due {}) cancelled as tenancy ends on {}",
+                        schedule.getInstallmentNumber(), schedule.getDueDate(), settlementDate);
+            }
+
+            toUpdate.add(schedule);
+        }
+
+        if (!toUpdate.isEmpty()) {
+            paymentRequestScheduleRepository.saveAll(toUpdate);
+            log.info("Finalised {} installment(s) for agreement {}", toUpdate.size(), agreementId);
+        }
+    }
+
+    /**
+     * For other charges and their split-payment shares:
+     * <ul>
+     *   <li>Charges/shares that were <em>included</em> in {@code calculateOutstandingCharges()}
+     *       (PENDING or OVERDUE, due on or before settlementDate) → {@code CANCELLED}
+     *       (absorbed into settlement).</li>
+     *   <li>Charges/shares not yet due or belonging to a different tenant scope →
+     *       {@code CANCELLED} (tenancy ended).</li>
+     * </ul>
+     */
+    private void finalizeOtherChargesOnSettlement(UUID tenantId, LocalDate settlementDate) {
+        User tenant = userRepository.findById(tenantId).orElse(null);
+        if (tenant == null) return;
+
+        // ── OtherCharge rows (tenant-specific, not yet fully paid) ──
+        List<OtherCharge> openCharges = otherChargeRepository
+                .findByTenantAndPaymentStatusIn(tenant,
+                        Arrays.asList(PaymentStatus.PENDING, PaymentStatus.OVERDUE));
+
+        List<OtherCharge> chargesToUpdate = new ArrayList<>();
+        for (OtherCharge charge : openCharges) {
+            // Only touch non-terminal charges
+            if (charge.getPaymentStatus() == PaymentStatus.COMPLETED
+                    || charge.getPaymentStatus() == PaymentStatus.CANCELLED) {
+                continue;
+            }
+            // All open charges for this tenant are cancelled when the tenancy settles
+            charge.setPaymentStatus(PaymentStatus.CANCELLED);
+            chargesToUpdate.add(charge);
+            log.debug("OtherCharge '{}' (id={}) cancelled on settlement", 
+                    charge.getChargeName(), charge.getChargeId());
+        }
+        if (!chargesToUpdate.isEmpty()) {
+            otherChargeRepository.saveAll(chargesToUpdate);
+            log.info("Finalised {} other charge(s) for tenant {}", chargesToUpdate.size(), tenantId);
+        }
+
+        // ── OtherChargePayment share rows (for room-split charges) ──
+        List<com.krunity.HostelManagment.model.OtherChargePayment> openPaymentShares =
+                otherChargePaymentService.getOutstandingCharge(tenantId);
+
+        List<com.krunity.HostelManagment.model.OtherChargePayment> sharesToUpdate = new ArrayList<>();
+        for (com.krunity.HostelManagment.model.OtherChargePayment share : openPaymentShares) {
+            if (share.getStatus() == PaymentStatus.COMPLETED
+                    || share.getStatus() == PaymentStatus.CANCELLED) {
+                continue;
+            }
+            share.setStatus(PaymentStatus.CANCELLED);
+            sharesToUpdate.add(share);
+            log.debug("OtherChargePayment share (id={}) cancelled on settlement", share.getPaymentId());
+        }
+        if (!sharesToUpdate.isEmpty()) {
+            otherChargePaymentRepository.saveAll(sharesToUpdate);
+            log.info("Finalised {} other-charge payment share(s) for tenant {}", 
+                    sharesToUpdate.size(), tenantId);
+        }
+    }
+
+    /**
+     * Marks electricity payment shares that were included in
+     * {@code calculateOutstandingElectricityBills()} as {@code CANCELLED}
+     * (absorbed into settlement). Shares for other rooms are left untouched.
+     */
+    private void finalizeElectricityPaymentsOnSettlement(Agreement agreement, LocalDate settlementDate) {
+        if (agreement.getRoomId() == null) return;
+
+        List<ElectricityPayment> payments =
+                electricityPaymentRepository.findByTenantIdWithBillDetails(agreement.getUserId());
+
+        List<ElectricityPayment> toUpdate = new ArrayList<>();
+        for (ElectricityPayment payment : payments) {
+            // Already paid or already cancelled – skip
+            if (payment.getStatus() == PaymentStatus.COMPLETED
+                    || payment.getStatus() == PaymentStatus.CANCELLED) {
+                continue;
+            }
+
+            ElectricityBill bill = payment.getElectricityBill();
+            if (bill == null) continue;
+
+            // Only touch bills for this tenant's room (mirrors calculateOutstandingElectricityBills)
+            if (!agreement.getRoomId().equals(bill.getRoomId())) continue;
+
+            // Mark cancelled – absorbed into settlement (whether before or after settlementDate)
+            payment.setStatus(PaymentStatus.CANCELLED);
+            toUpdate.add(payment);
+            log.debug("ElectricityPayment (id={}, bill={}/{}) cancelled on settlement",
+                    payment.getPaymentId(), bill.getBillMonth(), bill.getBillYear());
+        }
+
+        if (!toUpdate.isEmpty()) {
+            electricityPaymentRepository.saveAll(toUpdate);
+            log.info("Finalised {} electricity payment(s) for agreement {}", 
+                    toUpdate.size(), agreement.getId());
+        }
+    }
+
+    /** Returns true if an installment status is already terminal (no need to touch it). */
+    private boolean isInstallmentTerminal(com.krunity.HostelManagment.enums.TransactionStatus status) {
+        return status == com.krunity.HostelManagment.enums.TransactionStatus.COMPLETED
+                || status == com.krunity.HostelManagment.enums.TransactionStatus.CANCELLED
+                || status == com.krunity.HostelManagment.enums.TransactionStatus.FAILED;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Transitions the allotment from SETTLEMENT_REQUESTED → ON_NOTICE_PERIOD
