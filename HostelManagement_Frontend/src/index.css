@@ -53,6 +53,25 @@
 }
 
 @layer utilities {
+  /* Keep account-mapping tables deterministic even when a stale utility build omits responsive variants. */
+  .electricity-account-mobile-table {
+    display: table;
+  }
+
+  .electricity-account-desktop-table {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .electricity-account-mobile-table {
+      display: none;
+    }
+
+    .electricity-account-desktop-table {
+      display: table;
+    }
+  }
+
   .text-balance {
     text-wrap: balance;
   }

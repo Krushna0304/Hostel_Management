@@ -15,6 +15,8 @@ public interface ElectricityPaymentRepository extends JpaRepository<ElectricityP
 
     List<ElectricityPayment> findByBillIdOrderByCreatedAtDesc(UUID billId);
 
+    long countByBillId(UUID billId);
+
     List<ElectricityPayment> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
     // A tenant has at most one share per bill.

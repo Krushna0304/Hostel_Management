@@ -35,6 +35,7 @@ public class SettlementResponseDto {
     private BigDecimal otherDeductions;
     private BigDecimal totalDeductions;
     private BigDecimal finalSettlementAmount;
+    private BigDecimal extensionCreditApplied;
     private String settlementType;
     
     // Notes and descriptions

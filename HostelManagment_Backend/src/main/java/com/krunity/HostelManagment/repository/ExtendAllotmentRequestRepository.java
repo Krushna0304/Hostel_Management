@@ -11,9 +11,14 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.Optional;
 
 @Repository
 public interface ExtendAllotmentRequestRepository extends JpaRepository<ExtendAllotmentRequest, UUID> {
+
+    Optional<ExtendAllotmentRequest> findByNewAgreementId(String newAgreementId);
+
+    Optional<ExtendAllotmentRequest> findByCurrentAgreementId(String currentAgreementId);
 
     /**
      * Find extension requests by tenant ordered by creation date descending

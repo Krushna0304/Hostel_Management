@@ -7,6 +7,14 @@ import extensionService from '../services/extensionService';
 import agreementService from '../services/agreementService';
 import { useSuccessPopup } from '../hooks/useSuccessPopup';
 
+const toExtensionPlan = (plan) => ({
+  ...plan,
+  planId: plan.id ?? plan.planId,
+  durationMonths: plan.duration?.value ?? plan.durationMonths ?? 0,
+  monthlyRent: plan.rentDetails?.monthlyRent ?? plan.monthlyRent ?? 0,
+  securityDeposit: plan.charges?.securityDeposit?.amount ?? plan.securityDeposit ?? 0,
+});
+
 /**
  * Extension Request Form Component for Tenants
  * 
@@ -76,11 +84,11 @@ const ExtensionRequestForm = ({
     setError('');
     
     try {
-      // Get active plans based on agreement type or default to ROOM
-      const planType = agreement?.type || 'ROOM';
+      // Agreements and plans use the same canonical room type.
+      const planType = agreement?.type || 'PG_ROOM';
       const response = await agreementService.getActivePlans(planType);
       
-      const plans = response.data || [];
+      const plans = (response.data || []).map(toExtensionPlan);
       setAvailablePlans(plans);
       
       if (plans.length === 0) {
@@ -301,7 +309,7 @@ const ExtensionRequestForm = ({
           </div>
           <div>
             <span className="font-medium text-slate-700">Agreement Type:</span>
-            <span className="ml-2 text-slate-900">{agreement.type || 'ROOM'}</span>
+            <span className="ml-2 text-slate-900">{agreement.type || 'PG_ROOM'}</span>
           </div>
         </div>
       </div>

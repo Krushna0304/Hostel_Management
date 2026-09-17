@@ -18,10 +18,12 @@ public class RoomAllotmentDataMigration implements CommandLineRunner {
     private EntityManager entityManager;
 
     @Override
+    @Transactional
     public void run(String... args) {
         try {
             // Only run data migrations, not schema migrations
             // Schema is now managed by Hibernate entity definitions
+            removeLegacyTenantAllotmentUniqueConstraint();
             fixInflatedScheduleAmounts();
         } catch (Exception ex) {
             log.warn("Data migration failed: {}", ex.getMessage());
@@ -48,6 +50,42 @@ public class RoomAllotmentDataMigration implements CommandLineRunner {
             }
         } catch (Exception ex) {
             log.debug("Payment schedule amount fix skipped or not needed: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * Hibernate created a unique constraint for room_allotments.tenant_id while
+     * RoomAllotment.tenant was modelled as @OneToOne. Tenant extensions create a
+     * second, non-overlapping allotment, so that constraint must not survive in
+     * databases created before the relationship was corrected to @ManyToOne.
+     */
+    @Transactional
+    public void removeLegacyTenantAllotmentUniqueConstraint() {
+        try {
+            @SuppressWarnings("unchecked")
+            java.util.List<String> constraints = entityManager.createNativeQuery("""
+                    SELECT tc.constraint_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                      ON tc.constraint_schema = kcu.constraint_schema
+                     AND tc.constraint_name = kcu.constraint_name
+                    WHERE tc.table_name = 'room_allotments'
+                      AND tc.constraint_type = 'UNIQUE'
+                      AND kcu.column_name = 'tenant_id'
+                    """).getResultList();
+
+            for (String constraint : constraints) {
+                // Constraint names come from PostgreSQL metadata. Keep the
+                // identifier validation as a defensive guard before DDL.
+                if (constraint != null && constraint.matches("[A-Za-z0-9_]+")) {
+                    entityManager.createNativeQuery(
+                            "ALTER TABLE room_allotments DROP CONSTRAINT IF EXISTS " + constraint)
+                            .executeUpdate();
+                    log.info("Removed legacy unique tenant allotment constraint: {}", constraint);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Could not remove legacy tenant allotment constraint: {}", ex.getMessage());
         }
     }
 

@@ -6,10 +6,13 @@ import com.krunity.HostelManagment.dto.CreatePlanRequest;
 import com.krunity.HostelManagment.dto.PlanResponse;
 import com.krunity.HostelManagment.enums.PlanStatus;
 import com.krunity.HostelManagment.enums.PlanType;
+import com.krunity.HostelManagment.enums.AgreementStatus;
 import com.krunity.HostelManagment.exception.NotFoundException;
 import com.krunity.HostelManagment.exception.UnauthorizedException;
 import com.krunity.HostelManagment.model.RoomAgreementPlan;
+import com.krunity.HostelManagment.model.Agreement;
 import com.krunity.HostelManagment.model.User;
+import com.krunity.HostelManagment.repository.AgreementRepository;
 import com.krunity.HostelManagment.model.plan.Charges;
 import com.krunity.HostelManagment.model.plan.PlanAudit;
 import com.krunity.HostelManagment.repository.RoomAgreementPlanRepository;
@@ -20,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,29 +33,53 @@ public class RoomAgreementPlanService {
     private RoomAgreementPlanRepository planRepository;
 
     @Autowired
+    private AgreementRepository agreementRepository;
+
+    @Autowired
     private PaymentCalculationService paymentCalculationService;
 
     /**
-     * Returns plans visible to the logged-in owner:
-     * - Global/system plans (ownerId is null) where isActive = true
-     * - Plans created by this owner where isActive = true
+     * Returns plans visible to the caller. Owners see global and their own plans;
+     * tenants see only active plans owned by the owner of their active agreement.
      *
-     * @param planType optional filter — "PG_ROOM", "FLAT", or null (returns all)
+     * @param planType optional filter — "PG_ROOM", "ROOM", "FLAT", or null (returns all)
      *                 "PG_ROOM" includes plans whose planType is PG_ROOM or absent/null (backward compat)
      *                 "FLAT"    includes only plans whose planType is FLAT
      * @throws IllegalArgumentException if planType is not a valid PlanType value
      */
     public List<PlanResponse> getActivePlans(String planType) {
-        User owner = ApplicationContext.getUser();
+        User user = ApplicationContext.getUser();
+        boolean tenantRequest = user != null && user.getRole() != null
+                && "TENANT".equalsIgnoreCase(user.getRole().getName());
+        UUID planOwnerId = user != null ? user.getUserId() : null;
+
+        // A tenant may only select plans created by the owner of their active agreement.
+        // Do not include global or another owner's plans in the extension dropdown.
+        if (tenantRequest) {
+            Agreement activeAgreement = agreementRepository.findByUserId(user.getUserId()).stream()
+                    .filter(agreement -> agreement.getStatus() == AgreementStatus.ACTIVE)
+                    .findFirst()
+                    .orElseThrow(() -> new NotFoundException("No active agreement found for tenant"));
+            planOwnerId = activeAgreement.getOwnerId();
+            if (planOwnerId == null) {
+                throw new NotFoundException("No owner is associated with the active agreement");
+            }
+        }
 
         // Validate planType if provided
         PlanType resolvedPlanType = null;
         if (planType != null && !planType.isBlank()) {
             try {
-                resolvedPlanType = PlanType.valueOf(planType.trim().toUpperCase());
+                String normalizedPlanType = planType.trim().toUpperCase();
+                // Agreements expose the room type as ROOM, while plans persist it as PG_ROOM.
+                // Accept the agreement label at the API boundary for backward compatibility.
+                if ("ROOM".equals(normalizedPlanType)) {
+                    normalizedPlanType = PlanType.PG_ROOM.name();
+                }
+                resolvedPlanType = PlanType.valueOf(normalizedPlanType);
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(
-                        "Invalid planType filter value. Allowed: PG_ROOM, FLAT");
+                        "Invalid planType filter value. Allowed: ROOM, PG_ROOM, FLAT");
             }
         }
 
@@ -59,21 +87,27 @@ public class RoomAgreementPlanService {
 
         if (resolvedPlanType == null) {
             // No filter — return all active plans that are also isActive = true
-            plans.addAll(planRepository.findByOwnerIdIsNullAndStatusAndIsActive(PlanStatus.ACTIVE, true));
-            if (owner != null) {
-                plans.addAll(planRepository.findByOwnerIdAndStatusAndIsActive(owner.getUserId(), PlanStatus.ACTIVE, true));
+            if (!tenantRequest) {
+                plans.addAll(planRepository.findByOwnerIdIsNullAndStatusAndIsActive(PlanStatus.ACTIVE, true));
+            }
+            if (planOwnerId != null) {
+                plans.addAll(planRepository.findByOwnerIdAndStatusAndIsActive(planOwnerId, PlanStatus.ACTIVE, true));
             }
         } else if (resolvedPlanType == PlanType.PG_ROOM) {
             // PG_ROOM: include plans where planType = 'PG_ROOM' OR planType is absent/null AND isActive = true
-            plans.addAll(planRepository.findGlobalActiveByPlanTypePgRoomAndIsActive(PlanStatus.ACTIVE, true));
-            if (owner != null) {
-                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypePgRoomAndIsActive(owner.getUserId(), PlanStatus.ACTIVE, true));
+            if (!tenantRequest) {
+                plans.addAll(planRepository.findGlobalActiveByPlanTypePgRoomAndIsActive(PlanStatus.ACTIVE, true));
+            }
+            if (planOwnerId != null) {
+                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypePgRoomAndIsActive(planOwnerId, PlanStatus.ACTIVE, true));
             }
         } else {
             // FLAT: include only plans where planType = 'FLAT' AND isActive = true
-            plans.addAll(planRepository.findGlobalActiveByPlanTypeFlatAndIsActive(PlanStatus.ACTIVE, true));
-            if (owner != null) {
-                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypeFlatAndIsActive(owner.getUserId(), PlanStatus.ACTIVE, true));
+            if (!tenantRequest) {
+                plans.addAll(planRepository.findGlobalActiveByPlanTypeFlatAndIsActive(PlanStatus.ACTIVE, true));
+            }
+            if (planOwnerId != null) {
+                plans.addAll(planRepository.findByOwnerIdAndStatusAndPlanTypeFlatAndIsActive(planOwnerId, PlanStatus.ACTIVE, true));
             }
         }
 

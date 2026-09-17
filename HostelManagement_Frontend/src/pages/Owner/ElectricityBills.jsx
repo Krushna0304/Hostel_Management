@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
-import { Button, LoadingScreen } from '../../components/ui'
+import { LoadingScreen } from '../../components/ui'
 
 // Lazy load components to avoid potential circular dependency issues
 const ElectricityAccountManagement = lazy(() => import('../../components/ElectricityAccountManagement'))
@@ -47,19 +47,20 @@ export default function ElectricityBills() {
 
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">
-        <nav className="flex space-x-8">
+        <nav className="grid grid-cols-3 gap-1 sm:flex sm:gap-6" aria-label="Electricity bill sections">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 py-2.5 px-1 border-b-2 font-medium text-sm transition-colors ${
+              aria-current={activeTab === tab.id ? 'page' : undefined}
+              className={`flex min-w-0 items-center justify-center gap-1 border-b-2 px-1 py-2.5 text-xs font-medium leading-4 transition-colors sm:w-auto sm:gap-2 sm:px-2 sm:text-sm ${
                 activeTab === tab.id
                   ? 'border-slate-950 text-slate-950'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
-              <span className="text-lg">{tab.icon}</span>
-              {tab.label}
+              <span className="shrink-0 text-base sm:text-lg">{tab.icon}</span>
+              <span className="min-w-0 text-center">{tab.label}</span>
             </button>
           ))}
         </nav>

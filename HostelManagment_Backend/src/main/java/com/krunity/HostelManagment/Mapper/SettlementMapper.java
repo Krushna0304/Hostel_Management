@@ -40,6 +40,7 @@ public class SettlementMapper {
                 .otherDeductions(settlement.getOtherDeductions())
                 .totalDeductions(settlement.getTotalDeductions())
                 .finalSettlementAmount(settlement.getFinalSettlementAmount())
+                .extensionCreditApplied(settlement.getExtensionCreditApplied())
                 .settlementType(settlement.getSettlementType())
                 
                 // Notes and descriptions

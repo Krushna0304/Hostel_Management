@@ -6,6 +6,15 @@ import extensionService from '../services/extensionService';
 import agreementService from '../services/agreementService';
 import { useSuccessPopup } from '../hooks/useSuccessPopup';
 
+const toExtensionPlan = (plan) => ({
+  ...plan,
+  // PlanResponse uses id and nested billing fields; retain the flat fields used by this modal.
+  planId: plan.id ?? plan.planId,
+  durationMonths: plan.duration?.value ?? plan.durationMonths ?? 0,
+  monthlyRent: plan.rentDetails?.monthlyRent ?? plan.monthlyRent ?? 0,
+  securityDeposit: plan.charges?.securityDeposit?.amount ?? plan.securityDeposit ?? 0,
+});
+
 const ExtensionRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
   const [formData, setFormData] = useState({
     currentAgreementId: '',
@@ -33,9 +42,9 @@ const ExtensionRequestModal = ({ isOpen, onClose, agreement, onSuccess }) => {
   const loadAvailablePlans = async () => {
     setLoadingPlans(true);
     try {
-      // Get active plans from the API - assuming we need room/shared plans
-      const response = await agreementService.getActivePlans('ROOM');
-      setAvailablePlans(response.data || []);
+      // PG room plans use the same canonical type as the agreement and plan APIs.
+      const response = await agreementService.getActivePlans('PG_ROOM');
+      setAvailablePlans((response.data || []).map(toExtensionPlan));
     } catch (error) {
       console.error('Error loading plans:', error);
       setError('Failed to load available plans');

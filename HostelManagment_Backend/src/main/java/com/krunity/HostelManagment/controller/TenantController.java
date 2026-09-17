@@ -16,6 +16,7 @@ import com.krunity.HostelManagment.service.AllotmentService;
 import com.krunity.HostelManagment.service.PaymentScheduleService;
 import com.krunity.HostelManagment.service.PaymentCalculationService;
 import com.krunity.HostelManagment.service.TenantDashboardService;
+import com.krunity.HostelManagment.service.TenantAgreementSelectionService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ public class TenantController {
 
     @Autowired
     private TenantDashboardService tenantDashboardService;
+
+    @Autowired
+    private TenantAgreementSelectionService tenantAgreementSelectionService;
 
     @Autowired
     private PaymentScheduleService paymentScheduleService;
@@ -118,23 +122,22 @@ public class TenantController {
     public ResponseEntity<?> getMyAgreement() {
         User tenant = ApplicationContext.getUser();
 
-        // Search across all non-terminal statuses to find the tenant's current allotment
-        RoomAllotment allotment = roomAllotmentRepository
-                .findByTenant_UserIdAndRoomAllotmentStatusIn(
-                        tenant.getUserId(),
-                        RoomAllotmentStatus.occupyingStatuses())
-                .stream().findFirst()
-                .orElseThrow(() -> new com.krunity.HostelManagment.exception.NotFoundException("No active allotment found"));
-
-        String agreementId = allotment.getAgreementId();
-
         com.krunity.HostelManagment.model.Agreement agreement =
-                agreementRepository.findById(agreementId)
-                        .orElseThrow(() -> new com.krunity.HostelManagment.exception.NotFoundException("Agreement not found"));
+                tenantAgreementSelectionService.selectForTenant(tenant.getUserId());
+
+        RoomAllotment allotment = roomAllotmentRepository
+                .findByTenant_UserIdAndAgreementId(tenant.getUserId(), agreement.getId())
+                .orElse(null);
 
         com.krunity.HostelManagment.dto.AgreementResponse response =
                 com.krunity.HostelManagment.Mapper.AgreementMapper.toResponse(agreement);
-        response.setRoomNumber(allotment.getRoom().getRoomNumber());
+        if (allotment != null && allotment.getRoom() != null) {
+            response.setRoomNumber(allotment.getRoom().getRoomNumber());
+        } else if (agreement.getRoomId() != null) {
+            roomRepository.findById(agreement.getRoomId())
+                    .map(Room::getRoomNumber)
+                    .ifPresent(response::setRoomNumber);
+        }
         response.setRefundableAmount(paymentCalculationService
                 .calculatePaymentBreakdown(agreement.getPlanSnapshot())
                 .getAgreementTimeRefundable());
@@ -156,6 +159,11 @@ public class TenantController {
         
         java.util.List<com.krunity.HostelManagment.dto.AgreementResponse> responses = 
                 agreements.stream()
+                    .sorted(java.util.Comparator
+                            .comparing(com.krunity.HostelManagment.model.Agreement::getStartDate,
+                                    java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+                            .thenComparing(com.krunity.HostelManagment.model.Agreement::getCreatedAt,
+                                    java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
                     .map(agreement -> {
                         com.krunity.HostelManagment.dto.AgreementResponse response =
                                 com.krunity.HostelManagment.Mapper.AgreementMapper.toResponse(agreement);

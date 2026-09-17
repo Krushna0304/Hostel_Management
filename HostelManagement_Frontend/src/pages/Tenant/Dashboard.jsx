@@ -631,6 +631,10 @@ export default function TenantDashboard() {
     return monthlyTotal * monthsPerInstallment
   })()
 
+  // The dashboard endpoint supplies the schedule for the same agreement it
+  // selected. Retain the ledger response as a backwards-compatible fallback.
+  const agreementInstallments = dashboard?.installments ?? schedule?.installments ?? []
+
   const stats = [
     {
       label: 'Installment amount',
@@ -856,7 +860,7 @@ export default function TenantDashboard() {
 
       {/* Approved extension requests awaiting payment */}
       {extensionRequests
-        .filter((req) => req.status === 'APPROVED' || req.status === 'PAYMENT_PENDING')
+        .filter((req) => req.status === 'APPROVED_PENDING_PAYMENT' && req.activationToken)
         .map((req) => (
           <div
             key={req.requestId}
@@ -879,13 +883,12 @@ export default function TenantDashboard() {
                 </p>
               )}
             </div>
-            <Button
-              label="Pay Now"
-              onClick={() => {
-                setSelectedExtensionRequest(req)
-                setShowExtensionPaymentModal(true)
-              }}
-            />
+            <a
+              href={`${window.location.origin}/tenant/activate?token=${encodeURIComponent(req.activationToken)}`}
+              className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Activate Agreement & Pay
+            </a>
           </div>
         ))
       }
@@ -953,10 +956,10 @@ export default function TenantDashboard() {
         <Card>
           <CardHeader
             title="Payment schedule"
-            description={`${schedule.installments?.length ?? 0} installments · ${schedule.paymentFrequency}`}
+            description={`${agreementInstallments.length} installments · ${dashboard?.paymentFrequency ?? schedule.paymentFrequency}`}
           />
           <CardContent>
-            {schedule.installments?.length === 0 ? (
+            {agreementInstallments.length === 0 ? (
               <EmptyState title="No schedule yet" description="Your payment schedule will appear here once generated." />
             ) : (
               <div className="overflow-x-auto">
@@ -972,7 +975,7 @@ export default function TenantDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {schedule.installments.map((inst) => {
+                    {agreementInstallments.map((inst) => {
                       return (
                         <tr key={inst.scheduleId} className="py-3">
                           <td className="py-3 pr-4 font-medium text-slate-700">{inst.installmentNumber}</td>

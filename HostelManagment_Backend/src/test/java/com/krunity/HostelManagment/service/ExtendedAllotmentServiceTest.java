@@ -123,7 +123,7 @@ class ExtendedAllotmentServiceTest {
                 .owner(owner)
                 .currentAgreementId("agreement-123")
                 .currentRoom(room)
-                .newPlanId(UUID.fromString(plan.getId()))
+                .newPlanId(plan.getId())
                 .extensionStartDate(LocalDate.now().plusDays(30))
                 .extensionEndDate(LocalDate.now().plusDays(210)) // 6 months extension
                 .status(ExtendAllotmentStatus.PENDING_OWNER_APPROVAL)
@@ -148,7 +148,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
         requestDto.setTenantNotes("Request 6-month extension");
 
         // Setup plan with 6-month duration
@@ -458,7 +458,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Setup plan with 1-year duration
         plan.setDuration(Duration.builder()
@@ -493,7 +493,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Setup plan with 1-month duration
         plan.setDuration(Duration.builder()
@@ -528,7 +528,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Setup plan with 12-month duration (to Feb 2025, non-leap year)
         plan.setDuration(Duration.builder()
@@ -560,7 +560,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Setup plan with 4-week duration
         plan.setDuration(Duration.builder()
@@ -593,7 +593,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Setup plan with 30-day duration
         plan.setDuration(Duration.builder()
@@ -626,7 +626,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Setup plan with null duration
         plan.setDuration(null);
@@ -654,7 +654,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Setup plan with invalid duration unit
         plan.setDuration(Duration.builder()
@@ -687,7 +687,7 @@ class ExtendedAllotmentServiceTest {
         
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-123");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         // Mock dependencies
         when(agreementService.getAgreementById(anyString())).thenReturn(Optional.of(currentAgreement));

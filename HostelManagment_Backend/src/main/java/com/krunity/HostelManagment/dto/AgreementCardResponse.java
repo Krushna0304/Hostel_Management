@@ -13,6 +13,7 @@ public class AgreementCardResponse {
     private String id;
     private AgreementType type;
     private AgreementStatus status;
+    private Boolean isAccepted;
     
     // Plan information for card display
     private String planName;

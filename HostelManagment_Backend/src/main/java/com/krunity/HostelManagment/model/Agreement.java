@@ -24,7 +24,7 @@ public class Agreement {
     @Id
     private String id;
     
-    private AgreementType type; // ROOM / WORKER
+    private AgreementType type; // PG_ROOM / FLAT / WORKER (ROOM is retained for legacy records)
     private AgreementStatus status;
     
     private UUID userId;
@@ -45,7 +45,7 @@ public class Agreement {
     private String planId; // Reference to the selected plan
     private RoomAgreementPlan planSnapshot; // Complete snapshot of the plan at agreement creation time
 
-    // Co-tenant names for FLAT agreements (0–5 entries, each ≤ 100 chars); absent on ROOM/WORKER agreements
+    // Co-tenant names for FLAT agreements (0–5 entries, each ≤ 100 chars); absent on PG_ROOM/WORKER agreements
     @Builder.Default
     private List<String> coTenantNames = new ArrayList<>();
     
@@ -57,6 +57,14 @@ public class Agreement {
     
     @Builder.Default
     private Boolean qrUsed = false;
+
+    /**
+     * Becomes true only after the tenant's activation payment has been
+     * successfully processed. Pending agreements must not appear in the
+     * tenant portal as an active/current agreement.
+     */
+    @Builder.Default
+    private Boolean isAccepted = false;
     
     private Instant createdAt;
     private Instant activatedAt;

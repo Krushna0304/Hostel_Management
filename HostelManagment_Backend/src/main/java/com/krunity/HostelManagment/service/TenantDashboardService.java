@@ -8,6 +8,7 @@ import com.krunity.HostelManagment.exception.NotFoundException;
 import com.krunity.HostelManagment.model.PaymentRequestSchedule;
 import com.krunity.HostelManagment.model.RoomAllotment;
 import com.krunity.HostelManagment.model.TenantPaymentPlan;
+import com.krunity.HostelManagment.model.Agreement;
 import com.krunity.HostelManagment.repository.PaymentRequestScheduleRepository;
 import com.krunity.HostelManagment.repository.RoomAllotmentRepository;
 import com.krunity.HostelManagment.repository.TenantPaymentPlanRepository;
@@ -30,29 +31,24 @@ public class TenantDashboardService {
     @Autowired
     private PaymentRequestScheduleRepository scheduleRepository;
 
+    @Autowired
+    private TenantAgreementSelectionService tenantAgreementSelectionService;
+
     /**
      * Returns the full dashboard summary for the currently logged-in tenant.
      */
     public TenantDashboardResponse getTenantDashboard(UUID tenantId) {
-        // Get the tenant's current allotment across any live status (everything except
-        // LEFT). This keeps the dashboard loading even after the tenant requests a
-        // settlement (SETTLEMENT_REQUESTED) or enters the notice period.
-        java.util.List<RoomAllotment> allotments = roomAllotmentRepository
-                .findByTenant_UserIdAndRoomAllotmentStatusIn(
-                        tenantId,
-                        com.krunity.HostelManagment.enums.RoomAllotmentStatus.occupyingStatuses());
+        Agreement agreement = tenantAgreementSelectionService.selectForTenant(tenantId);
+        RoomAllotment allotment = roomAllotmentRepository
+                .findByTenant_UserIdAndAgreementId(tenantId, agreement.getId())
+                .orElseThrow(() -> new NotFoundException("No room allotment found for selected agreement"));
 
-        // Prefer ACTIVE, then the most recently started allotment.
-        RoomAllotment allotment = allotments.stream()
-                .max(Comparator
-                        .comparing((RoomAllotment a) ->
-                                a.getRoomAllotmentStatus() == com.krunity.HostelManagment.enums.RoomAllotmentStatus.ACTIVE)
-                        .thenComparing(a -> a.getStartDate() != null ? a.getStartDate() : java.time.LocalDate.MIN))
-                .orElseThrow(() -> new NotFoundException("No room allotment found for tenant"));
-
-        // Get active payment plan
-        TenantPaymentPlan plan = paymentPlanRepository.findByTenant_UserIdAndIsActiveTrue(tenantId)
-                .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"));
+        // The plan is owned by the resolved allotment. Looking up any active
+        // plan by tenant is ambiguous while an accepted extension exists.
+        TenantPaymentPlan plan = allotment.getPaymentPlanId();
+        if (plan == null) {
+            throw new NotFoundException("No payment plan found for current allotment");
+        }
 
         // Get all schedules ordered by installment number
         List<PaymentRequestSchedule> schedules =
@@ -104,6 +100,7 @@ public class TenantDashboardService {
         response.setTotalPending(totalPending);
         response.setOverdueCount((int) overdueCount);
         response.setNextDueInstallment(nextDue);
+        response.setInstallments(schedules.stream().map(this::toInstallmentResponse).toList());
         return response;
     }
 
@@ -111,14 +108,10 @@ public class TenantDashboardService {
      * Returns collection summary for all tenants under the given owner.
      */
     public OwnerCollectionSummaryResponse getOwnerCollectionSummary(UUID ownerId) {
-        // Get all active and upcoming allotments for hostels owned by this owner.
-        // UPCOMING covers tenants who have already activated and paid (incl. first
-        // installment) but whose agreement start date is in the future.
+        // One row is deliberately returned per agreement/allotment. A tenant can
+        // have a history of agreements, each with its own payment plan and ledger.
         List<RoomAllotment> allotments = roomAllotmentRepository
-                .findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatusIn(
-                        ownerId, java.util.List.of(
-                                com.krunity.HostelManagment.enums.RoomAllotmentStatus.ACTIVE,
-                                com.krunity.HostelManagment.enums.RoomAllotmentStatus.UPCOMING));
+                .findByRoom_Hostel_Owner_UserId(ownerId);
 
         long totalCollected = 0L;
         long totalPending = 0L;
@@ -127,12 +120,13 @@ public class TenantDashboardService {
 
         List<OwnerCollectionSummaryResponse.TenantCollectionRow> rows = new ArrayList<>();
 
-        for (RoomAllotment allotment : allotments) {
+        for (RoomAllotment allotment : allotments.stream()
+                .sorted(Comparator.comparing(RoomAllotment::getStartDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList()) {
             UUID tenantId = allotment.getTenant().getUserId();
 
-            TenantPaymentPlan plan = paymentPlanRepository
-                    .findByTenant_UserIdAndIsActiveTrue(tenantId)
-                    .orElse(null);
+            TenantPaymentPlan plan = allotment.getPaymentPlanId();
 
             if (plan == null) continue;
 
@@ -171,6 +165,9 @@ public class TenantDashboardService {
             row.setOverdueInstallments(overdueSchedules.size());
             row.setTotalOverdueAmount(tenantOverdue);
             row.setAgreementId(plan.getAgreementId());
+            row.setPlanId(plan.getPlanId().toString());
+            row.setStartDate(plan.getStartDate());
+            row.setEndDate(plan.getEndDate());
             rows.add(row);
         }
 

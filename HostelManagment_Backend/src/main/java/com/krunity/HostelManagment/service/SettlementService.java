@@ -35,6 +35,9 @@ public class SettlementService {
     private SettlementRequestRepository settlementRepository;
 
     @Autowired
+    private ExtendAllotmentRequestRepository extendAllotmentRequestRepository;
+
+    @Autowired
     private AgreementRepository agreementRepository;
 
     @Autowired
@@ -183,7 +186,17 @@ public class SettlementService {
                 .add(settlement.getOtherDeductions());
 
         // Calculate final settlement amount
-        BigDecimal finalAmount = refundableAmount.subtract(totalDeductions);
+        // The prior agreement's refundable credit may already have reduced the
+        // activation charge of a signed extension. Apply that exact snapshot
+        // once here so it cannot be refunded or charged twice.
+        BigDecimal extensionCredit = extendAllotmentRequestRepository
+                .findByCurrentAgreementId(agreement.getId())
+                .filter(request -> request.getNewAgreementId() != null)
+                .map(ExtendAllotmentRequest::getPreviousAgreementRefundableAmount)
+                .orElse(BigDecimal.ZERO);
+        settlement.setExtensionCreditApplied(extensionCredit);
+
+        BigDecimal finalAmount = refundableAmount.subtract(totalDeductions).subtract(extensionCredit);
         String settlementType = finalAmount.compareTo(BigDecimal.ZERO) >= 0 ? "OWNER_PAYABLE" : "TENANT_PAYABLE";
 
         return SettlementCalculationDto.builder()
@@ -277,7 +290,15 @@ public class SettlementService {
 
         settlement.setTotalDeductions(totalDeductions);
 
-        BigDecimal finalAmount = refundableAmount.subtract(totalDeductions);
+        // Use the same X credit shown during extension activation. The value is
+        // read from the linked request rather than recalculated from mutable plan data.
+        BigDecimal extensionCredit = extendAllotmentRequestRepository
+                .findByCurrentAgreementId(agreement.getId())
+                .filter(request -> request.getNewAgreementId() != null)
+                .map(ExtendAllotmentRequest::getPreviousAgreementRefundableAmount)
+                .orElse(BigDecimal.ZERO);
+        settlement.setExtensionCreditApplied(extensionCredit);
+        BigDecimal finalAmount = refundableAmount.subtract(totalDeductions).subtract(extensionCredit);
         settlement.setFinalSettlementAmount(finalAmount.abs());
 
         if (finalAmount.compareTo(BigDecimal.ZERO) >= 0) {
@@ -335,6 +356,8 @@ public class SettlementService {
         agreement.setEndDate(settlement.getRequestedEndDate());
         agreementRepository.save(agreement);
 
+        activateLinkedExtension(agreement.getId());
+
         // Transition allotment → ON_NOTICE_PERIOD now that payment is done
         transitionAllotmentToOnNoticePeriod(settlement);
         allotmentService.markEndDate(settlementId, userId, settlement.getRequestedEndDate());
@@ -348,6 +371,23 @@ public class SettlementService {
 
         log.info("Settlement completed successfully for agreement: {}", settlement.getAgreementId());
         return settlement;
+    }
+
+    private void activateLinkedExtension(String previousAgreementId) {
+        extendAllotmentRequestRepository.findByCurrentAgreementId(previousAgreementId)
+                .filter(request -> request.getNewAgreementId() != null)
+                .ifPresent(request -> agreementRepository.findById(request.getNewAgreementId())
+                        .ifPresent(extensionAgreement -> {
+                            if (extensionAgreement.getStatus() == AgreementStatus.PENDING_PREVIOUS_SETTLEMENT) {
+                                extensionAgreement.setStatus(AgreementStatus.ACTIVE);
+                                extensionAgreement.setActivatedAt(java.time.Instant.now());
+                                agreementRepository.save(extensionAgreement);
+                                request.updateStatus(com.krunity.HostelManagment.enums.ExtendAllotmentStatus.ACTIVE);
+                                extendAllotmentRequestRepository.save(request);
+                                log.info("Activated extension agreement {} after settlement of {}",
+                                        extensionAgreement.getId(), previousAgreementId);
+                            }
+                        }));
     }
 
     public List<SettlementResponseDto> getOwnerSettlements(UUID ownerId) {

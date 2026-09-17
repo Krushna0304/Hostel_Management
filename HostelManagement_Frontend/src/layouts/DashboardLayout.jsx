@@ -53,7 +53,7 @@ const titleMap = {
   },
   '/owner/agreements': {
     title: 'Agreements',
-    description: 'Create and monitor tenant onboarding agreements with better visibility.',
+    description: 'Manage tenant onboarding agreements, creation flows, and status tracking from a cleaner interface.',
   },
   '/owner/collections': {
     title: 'Rent Collections',
@@ -73,7 +73,7 @@ const titleMap = {
   },
   '/owner/plans': {
     title: 'Tenant Plans',
-    description: 'Create and manage custom rent plans visible only to you.',
+    description: 'Create and manage custom rent plans. Plans you create are visible only to you.',
   },
   '/owner/plans/create': {
     title: 'Create Plan',
@@ -102,6 +102,10 @@ const titleMap = {
   '/tenant-portal/dashboard': {
     title: 'My Dashboard',
     description: 'Your payment schedule, upcoming dues, and payment history.',
+  },
+  '/tenant-portal/agreements': {
+    title: 'My Agreements',
+    description: 'Review your current, upcoming, and previous agreements.',
   },
   '/tenant-portal/other-charges': {
     title: 'My Other Charges',

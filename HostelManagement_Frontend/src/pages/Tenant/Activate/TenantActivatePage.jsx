@@ -144,9 +144,10 @@ export default function TenantActivatePage() {
       // Step 2: Create order on backend
       const orderRes = await apiClient.post('/api/payments/create-order', {
         agreementId: agreement.id,
-        amount: agreement.planSnapshot?.rentDetails?.monthlyRent
-          || agreement.rent
-          || 0,
+        amount: agreement.activationPayableAmount
+          ?? (agreement.planSnapshot?.rentDetails?.monthlyRent
+            || agreement.rent
+            || 0),
         currency: 'INR',
       })
 
@@ -287,11 +288,11 @@ export default function TenantActivatePage() {
     return new Date(dateString).toLocaleDateString()
   }
 
-  const totalAmount =
-    parseFloat(agreement?.rent || 0) +
-    parseFloat(agreement?.deposit || 0) +
-    parseFloat(agreement?.cleaningCharges || 0) +
-    parseFloat(agreement?.maintenanceCharges || 0)
+  const totalAmount = agreement?.activationPayableAmount
+    ?? (parseFloat(agreement?.rent || 0) +
+      parseFloat(agreement?.deposit || 0) +
+      parseFloat(agreement?.cleaningCharges || 0) +
+      parseFloat(agreement?.maintenanceCharges || 0))
 
   if (loading) {
     return <LoadingScreen title="Loading agreement..." />
@@ -912,7 +913,7 @@ export default function TenantActivatePage() {
                             </div>
                             <div className="flex justify-between border-t border-white/10 pt-3 text-base font-semibold">
                               <span>Agreement Activation Total</span>
-                              <span>₹{activationTotal.toLocaleString()}</span>
+                              <span>₹{Number(agreement.activationPayableAmount ?? activationTotal).toLocaleString()}</span>
                             </div>
                           </>
                         )

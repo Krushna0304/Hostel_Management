@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Swal from 'sweetalert2'
 import { ownerReportService } from '../../services/agreementService'
 import { otherChargeService } from '../../services/otherChargeService'
@@ -20,6 +20,8 @@ import PaymentHistoryModal from '../../components/PaymentHistoryModal'
 import OtherChargeDetailsModal from '../../components/OtherChargeDetailsModal'
 import OwnerOtherChargePaymentModal from '../../components/OwnerOtherChargePaymentModal'
 import ElectricityCollectionHistoryModal from '../../components/ElectricityCollectionHistoryModal'
+import OtherChargeHistoryModal from '../../components/OtherChargeHistoryModal'
+import { buildOtherChargeTenantRows, OtherChargeTenantTable } from '../../components/OtherChargeViews'
 
 export default function CollectionDashboard() {
   const [data, setData] = useState(null)
@@ -29,6 +31,7 @@ export default function CollectionDashboard() {
   const [otherChargesLoaded, setOtherChargesLoaded] = useState(false)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [agreementFilter, setAgreementFilter] = useState('all')
   const [activeTab, setActiveTab] = useState('installments') // 'installments' or 'other-charges'
   const [showQuickPayment, setShowQuickPayment] = useState(false)
   const [selectedTenant, setSelectedTenant] = useState(null)
@@ -41,6 +44,7 @@ export default function CollectionDashboard() {
   const [showChargeDetails, setShowChargeDetails] = useState(false)
   const [showChargePayment, setShowChargePayment] = useState(false)
   const [selectedCharge, setSelectedCharge] = useState(null)
+  const [otherChargeHistoryTenant, setOtherChargeHistoryTenant] = useState(null)
 
   // Electricity collection states
   const [electricityRows, setElectricityRows] = useState([])
@@ -156,7 +160,7 @@ export default function CollectionDashboard() {
       console.log('Making request to:', `/owner/reports/tenant/${tenant.tenantId}/installments`)
       
       // Get the next due installment for this tenant
-      const res = await ownerReportService.getTenantInstallments(tenant.tenantId)
+      const res = await ownerReportService.getTenantInstallments(tenant.tenantId, tenant.planId)
       const installments = res.data
       
       // Find the next due installment - prioritize by status and due date
@@ -256,10 +260,17 @@ export default function CollectionDashboard() {
     return acc
   }, { totalAmount: 0, collectedAmount: 0, pendingAmount: 0, overdueAmount: 0 })
 
-  // Filter tenants based on search query
+  // Filter agreement rows based on search and agreement dates.
   const filteredTenants = data?.tenants?.filter((tenant) => {
     const query = searchQuery.toLowerCase()
-    return (
+    const today = new Date().toISOString().slice(0, 10)
+    const startDate = tenant.startDate || ''
+    const endDate = tenant.endDate || ''
+    const matchesAgreementPeriod = agreementFilter === 'all' ||
+      (agreementFilter === 'past' && endDate && endDate < today) ||
+      (agreementFilter === 'upcoming' && startDate && startDate > today) ||
+      (agreementFilter === 'current' && startDate && startDate <= today && (!endDate || endDate >= today))
+    return matchesAgreementPeriod && (
       tenant.tenantName?.toLowerCase().includes(query) ||
       tenant.hostelName?.toLowerCase().includes(query) ||
       tenant.roomNumber?.toLowerCase().includes(query) ||
@@ -277,6 +288,16 @@ export default function CollectionDashboard() {
       charge.roomNumber?.toLowerCase().includes(query)
     )
   })
+
+  const filteredOtherChargeTenantRows = useMemo(() => buildOtherChargeTenantRows(otherCharges).filter((tenant) => {
+    const query = searchQuery.toLowerCase()
+    return tenant.tenantName?.toLowerCase().includes(query) || tenant.hostelName?.toLowerCase().includes(query) || tenant.roomNumber?.toLowerCase().includes(query)
+  }), [otherCharges, searchQuery])
+
+  const handleCollectOtherChargeTenant = (tenant) => {
+    const charge = tenant.charges.find((item) => item.paymentStatus !== 'COMPLETED')
+    if (charge) handleCollectChargePayment(charge)
+  }
 
   // Filter electricity collection rows based on search query
   const filteredElectricity = electricityRows.filter((row) => {
@@ -327,7 +348,7 @@ export default function CollectionDashboard() {
         <PaymentHistoryModal
           tenantName={historyTenant.tenantName}
           fetchLedger={async () => {
-            const res = await ownerReportService.getTenantPaymentHistory(historyTenant.tenantId)
+            const res = await ownerReportService.getTenantPaymentHistory(historyTenant.tenantId, historyTenant.planId)
             return res.data
           }}
           onClose={() => {
@@ -352,6 +373,13 @@ export default function CollectionDashboard() {
           charge={selectedCharge}
           onClose={handleChargePaymentClose}
           onSuccess={handleChargePaymentSuccess}
+        />
+      )}
+
+      {otherChargeHistoryTenant && (
+        <OtherChargeHistoryModal
+          tenant={otherChargeHistoryTenant}
+          onClose={() => setOtherChargeHistoryTenant(null)}
         />
       )}
 
@@ -426,7 +454,24 @@ export default function CollectionDashboard() {
         </button>
       </div>
 
-      <Card>
+      {activeTab === 'other-charges' && (
+        <Card>
+          <CardHeader
+            title="Other charges collection"
+            description="Per-tenant other charges dues, outstanding and overdue amounts."
+          />
+          <CardContent className="p-0">
+            <OtherChargeTenantTable
+              loading={otherChargesLoading}
+              rows={filteredOtherChargeTenantRows}
+              onHistory={setOtherChargeHistoryTenant}
+              onCollect={handleCollectOtherChargeTenant}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab !== 'other-charges' && <Card>
         <CardHeader
           title={activeTab === 'installments' ? "Tenant collection status"
             : activeTab === 'electricity' ? "Electricity bills collection"
@@ -439,9 +484,22 @@ export default function CollectionDashboard() {
           }
         />
         <CardContent>
-          {/* Search Filter */}
-          <div className="mb-6">
-            <div className="relative">
+          {/* Agreement period and search filters */}
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row">
+            {activeTab === 'installments' && (
+              <select
+                aria-label="Filter agreements by period"
+                value={agreementFilter}
+                onChange={(e) => setAgreementFilter(e.target.value)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition focus:border-sky-300 focus:outline-none focus:ring-4 focus:ring-sky-100"
+              >
+                <option value="all">All agreements</option>
+                <option value="current">Current</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="past">Past</option>
+              </select>
+            )}
+            <div className="relative flex-1">
               <input
                 type="text"
                 placeholder={activeTab === 'installments' ?
@@ -481,7 +539,7 @@ export default function CollectionDashboard() {
             {searchQuery && (
               <p className="mt-2 text-xs text-slate-500">
                 {activeTab === 'installments' ?
-                  `Found ${filteredTenants.length} of ${data?.tenants?.length || 0} tenants` :
+                  `Found ${filteredTenants.length} of ${data?.tenants?.length || 0} agreements` :
                   activeTab === 'electricity' ?
                   `Found ${filteredElectricity.length} of ${electricityRows.length} tenants` :
                   `Found ${filteredOtherCharges.length} of ${otherCharges.length} charges`
@@ -494,8 +552,8 @@ export default function CollectionDashboard() {
             // Existing installments table
             !data?.tenants?.length ? (
               <EmptyState
-                title="No active tenants"
-                description="Tenant payment data will appear here once agreements are activated."
+                title="No agreements"
+                description="Agreement payment data will appear here once agreements are activated."
               />
             ) : filteredTenants.length === 0 ? (
               <EmptyState
@@ -517,7 +575,7 @@ export default function CollectionDashboard() {
                   </tr>                </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredTenants.map((t) => (
-                    <tr key={t.tenantId}>
+                    <tr key={t.planId || t.agreementId}>
                       <td className="py-3 pr-4">
                         <p className="font-semibold text-slate-950">{t.tenantName}</p>
                       </td>
@@ -779,7 +837,7 @@ export default function CollectionDashboard() {
             )
           )}
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   )
 }

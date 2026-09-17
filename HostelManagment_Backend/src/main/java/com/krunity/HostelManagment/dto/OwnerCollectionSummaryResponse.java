@@ -24,5 +24,8 @@ public class OwnerCollectionSummaryResponse {
         private Integer overdueInstallments;
         private Long totalOverdueAmount;
         private String agreementId;
+        private String planId;
+        private java.time.LocalDate startDate;
+        private java.time.LocalDate endDate;
     }
 }

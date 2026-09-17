@@ -557,7 +557,7 @@ function AgreementDetailModal({ agreement, onClose }) {
   )
 }
 
-export default function AgreementList() {
+export default function AgreementList({ searchQuery = '', statusFilter = 'ALL' }) {
   const navigate = useNavigate()
   const [agreements, setAgreements] = useState([])
   const [loading, setLoading] = useState(true)
@@ -659,6 +659,34 @@ export default function AgreementList() {
     if (!dateString) return 'N/A'
     return new Date(dateString).toLocaleDateString()
   }
+
+  const getEndDate = (agreement) => {
+    if (agreement.endDate) return formatDate(agreement.endDate)
+    if (!agreement.startDate || !agreement.planDurationValue || !agreement.planDurationUnit) return 'N/A'
+
+    const endDate = new Date(agreement.startDate)
+    if (agreement.planDurationUnit === 'MONTH') {
+      endDate.setMonth(endDate.getMonth() + agreement.planDurationValue)
+    } else if (agreement.planDurationUnit === 'YEAR') {
+      endDate.setFullYear(endDate.getFullYear() + agreement.planDurationValue)
+    } else {
+      return 'N/A'
+    }
+
+    return formatDate(endDate)
+  }
+
+  const visibleAgreements = agreements.filter((agreement) => {
+    const query = searchQuery.trim().toLowerCase()
+    const matchesSearch = !query || [
+      agreement.tenantName,
+      agreement.planName,
+      agreement.hostelName,
+      agreement.roomNumber,
+      agreement.type,
+    ].some((value) => value?.toLowerCase().includes(query))
+    return matchesSearch && (statusFilter === 'ALL' || agreement.status === statusFilter)
+  })
 
   if (loading) {
     return (
@@ -817,97 +845,56 @@ export default function AgreementList() {
         )}
 
         <Card>
-          <CardHeader
-            title="Agreement pipeline"
-            description="A responsive overview of every agreement with status, rent, timing, and QR activation context."
-          />
           <CardContent>
-            <div className="grid gap-4 xl:grid-cols-2">
-              {agreements.map((agreement) => {
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {visibleAgreements.length === 0 && (
+                <div className="col-span-full py-10 text-center">
+                  <p className="font-semibold text-slate-900">No matching agreements</p>
+                  <p className="mt-1 text-sm text-slate-500">Try a different search term or filter.</p>
+                </div>
+              )}
+              {visibleAgreements.map((agreement) => {
                 return (
                   <div
                     key={agreement.id}
-                    className="cursor-pointer rounded-3xl border border-slate-200 bg-slate-50/80 p-5 transition hover:border-slate-300 hover:shadow-md"
+                    className="cursor-pointer rounded-2xl border border-sky-200 bg-sky-50/60 p-4 transition hover:border-sky-300 hover:shadow-md"
                     onClick={() => handleCardClick(agreement)}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Agreement</p>
-                        <h3 className="mt-2 text-xl font-semibold text-slate-950">{agreement.type} agreement</h3>
-                        <p className="mt-1 text-sm font-medium text-blue-600">{agreement.planName}</p>
-                        {/* Duration Display */}
-                        {agreement.planDurationValue && agreement.planDurationUnit && (
-                          <p className="mt-1 text-sm text-slate-600">
-                            Duration: {agreement.planDurationValue} {agreement.planDurationUnit.toLowerCase()}{agreement.planDurationValue > 1 ? 's' : ''}
-                          </p>
-                        )}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="mt-0 truncate text-base font-semibold text-slate-950">
+                          {agreement.tenantName || 'Not available'}
+                        </h3>
+                        <p className="mt-1 text-sm font-medium text-slate-700">{agreement.type} Agreement</p>
                       </div>
                       <Badge variant={getStatusVariant(agreement.status)}>
                         {agreement.status?.replaceAll('_', ' ')}
                       </Badge>
                     </div>
 
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                        <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                          {agreement.numberOfInstallments > 1 ? 'Installment Amount' : 'Monthly Rent'}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          ₹{agreement.numberOfInstallments > 1 ? agreement.installmentAmount?.toLocaleString() : agreement.monthlyRent?.toLocaleString()}
-                        </p>
-                        {agreement.numberOfInstallments > 1 && (
-                          <p className="text-xs text-slate-500 mt-1">
-                            {agreement.numberOfInstallments} installments · {agreement.paymentTiming}
-                          </p>
-                        )}
-                      </div>
-                      <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                        <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Security Deposit</p>
-                        <p className="mt-2 text-lg font-semibold text-green-700">₹{agreement.securityDeposit?.toLocaleString()}</p>
-                        <p className="text-xs text-green-600 mt-1">Refundable</p>
-                      </div>
+                    <div className="mt-3 space-y-2 border-y border-sky-100 py-3 text-sm">
+                      <p className="leading-5 text-slate-700">
+                        <span className="font-semibold text-slate-900">Plan:</span> {agreement.planName || 'N/A'}
+                        <span className="mx-2 text-slate-300">|</span>
+                        <span className="font-semibold text-slate-900">Duration:</span>{' '}
+                        {agreement.planDurationValue && agreement.planDurationUnit
+                          ? `${agreement.planDurationValue} ${agreement.planDurationUnit.toLowerCase()}${agreement.planDurationValue > 1 ? 's' : ''}`
+                          : 'N/A'}
+                      </p>
+                      <p className="leading-5 text-slate-600">
+                        {agreement.hostelName || 'Hostel N/A'}
+                        <span className="mx-1.5 text-slate-300">•</span>
+                        Floor {agreement.floorNumber ?? 'N/A'}
+                        <span className="mx-1.5 text-slate-300">•</span>
+                        Room {agreement.roomNumber || 'N/A'}
+                      </p>
                     </div>
 
-                    <div className="mt-5 grid gap-3 text-sm text-slate-600">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p><span className="font-semibold text-slate-900">Start date:</span></p>
-                          <p className="text-slate-700">{formatDate(agreement.startDate)}</p>
-                        </div>
-                        <div>
-                          <p><span className="font-semibold text-slate-900">End date:</span></p>
-                          <p className="text-slate-700">
-                            {(() => {
-                              if (!agreement.startDate || !agreement.planDurationValue || !agreement.planDurationUnit) return 'N/A'
-                              
-                              const startDate = new Date(agreement.startDate)
-                              
-                              if (agreement.planDurationUnit === 'MONTH') {
-                                const endDate = new Date(startDate)
-                                endDate.setMonth(endDate.getMonth() + agreement.planDurationValue)
-                                return formatDate(endDate)
-                              } else if (agreement.planDurationUnit === 'YEAR') {
-                                const endDate = new Date(startDate)
-                                endDate.setFullYear(endDate.getFullYear() + agreement.planDurationValue)
-                                return formatDate(endDate)
-                              }
-                              return 'N/A'
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p><span className="font-semibold text-slate-900">Created:</span></p>
-                          <p className="text-slate-700">{formatDate(agreement.createdAt)}</p>
-                        </div>
-                        {agreement.activatedAt && (
-                          <div>
-                            <p><span className="font-semibold text-slate-900">Activated:</span></p>
-                            <p className="text-slate-700">{formatDate(agreement.activatedAt)}</p>
-                          </div>
-                        )}
-                      </div>
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
+                      <p><span className="font-semibold text-slate-900">Start date:</span> {formatDate(agreement.startDate)}</p>
+                      <p><span className="font-semibold text-slate-900">End date:</span> {getEndDate(agreement)}</p>
+                      <p><span className="font-semibold text-slate-900">Created:</span> {formatDate(agreement.createdAt)}</p>
+                      <p><span className="font-semibold text-slate-900">Activated:</span> {formatDate(agreement.activatedAt)}</p>
                     </div>
 
                     {agreement.status === 'PENDING_TENANT_ACTION' && (
@@ -930,20 +917,13 @@ export default function AgreementList() {
 
                     {/* Action buttons for active agreements */}
                     {agreement.status === 'ACTIVE' && (
-                      <div className="mt-4 flex gap-2">
+                      <div className="mt-3">
                         <Button
                           label="Create Settlement Transaction"
                           size="sm"
                           variant="primary"
                           onClick={(e) => handleCreateTransaction(e, agreement)}
-                          className="flex-1"
-                        />
-                        <Button
-                          label="View Details"
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleCardClick(agreement)}
-                          className="flex-1"
+                          className="w-full"
                         />
                       </div>
                     )}

@@ -156,22 +156,46 @@ function SummaryStrip({ transactions }) {
   }, [transactions])
 
   return (
-    <div className="grid grid-cols-3 gap-3">
-      <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-4 text-center">
+    <>
+      <style>
+  {`
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    @media (max-width: 1023px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 639px) {
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  `}
+</style>
+      <div className="summary-grid gap-3">
+      <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-3 py-4 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-600">Received</p>
-        <p className="mt-1 text-xl font-bold text-emerald-700">{fmt(totalReceived)}</p>
+        <p className="mt-1 text-lg sm:text-xl font-bold text-emerald-700 break-words">{fmt(totalReceived)}</p>
       </div>
-      <div className="rounded-2xl bg-rose-50 border border-rose-200 px-4 py-4 text-center">
+      <div className="rounded-2xl bg-rose-50 border border-rose-200 px-3 py-4 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.15em] text-rose-600">Sent</p>
-        <p className="mt-1 text-xl font-bold text-rose-700">{fmt(totalSent)}</p>
+        <p className="mt-1 text-lg sm:text-xl font-bold text-rose-700 break-words">{fmt(totalSent)}</p>
       </div>
-      <div className="rounded-2xl bg-slate-950 px-4 py-4 text-center">
+      <div className="rounded-2xl bg-slate-950 px-3 py-4 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Net</p>
-        <p className={`mt-1 text-xl font-bold ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <p className={`mt-1 text-lg sm:text-xl font-bold break-words ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
           {net >= 0 ? '+' : ''}{fmt(net)}
         </p>
       </div>
     </div>
+    </>
+  
   )
 }
 
@@ -235,7 +259,7 @@ function TransactionDetail({ tx, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drag handle (mobile) */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+        <div className="flex justify-center pt-3 pb-2 sm:hidden">
           <div className="h-1 w-10 rounded-full bg-slate-200" />
         </div>
 
@@ -396,7 +420,7 @@ export default function PaymentHistory() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto p-1 scrollbar-none">
         {FILTERS.map((f) => {
           const count = f.key === 'ALL' ? transactions.length
             : f.key === 'RECEIVED' ? transactions.filter(t => t.direction === 'RECEIVED').length
@@ -408,7 +432,7 @@ export default function PaymentHistory() {
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2
                 ${filter === f.key
                   ? 'bg-slate-950 text-white shadow'
                   : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'}`}

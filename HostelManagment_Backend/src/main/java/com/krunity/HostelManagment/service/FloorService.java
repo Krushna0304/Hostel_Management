@@ -91,7 +91,7 @@ public class FloorService {
         }
 
         var floors = floorRepository.findAllByHostel_HostelIdAndHostel_Owner_UserId(uuid, ownerId);
-        return floors.stream().map(FloorMapper::toDto).toList();
+        return floors.stream().map(FloorMapper::toDto).sorted((f1, f2) -> Integer.compare(f1.getFloorNumber(), f2.getFloorNumber())).toList();
     }
 
 }

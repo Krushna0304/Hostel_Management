@@ -89,6 +89,9 @@ public interface RoomAllotmentRepository extends JpaRepository<RoomAllotment, UU
 
     List<RoomAllotment> findByRoom_Hostel_Owner_UserIdAndRoomAllotmentStatusIn(UUID ownerId, Collection<RoomAllotmentStatus> statuses);
 
+    // Collections must retain completed and future agreements as well as live ones.
+    List<RoomAllotment> findByRoom_Hostel_Owner_UserId(UUID ownerId);
+
     // Fixed: Use roomAllotmentStatus instead of active
     List<RoomAllotment> findByRoomAndRoomAllotmentStatus(Room room, RoomAllotmentStatus status);
 

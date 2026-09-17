@@ -8,6 +8,7 @@ import com.krunity.HostelManagment.model.*;
 import com.krunity.HostelManagment.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,8 @@ public class CashPaymentOtpService {
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private NotificationService notificationService;
 
+    @Value("${app.isDev}")
+    private boolean isDev;
     private static final int OTP_EXPIRY_MINUTES = 10;
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -264,7 +267,8 @@ public class CashPaymentOtpService {
     }
 
     private String generateOtp() {
-        return String.valueOf(100000 + RANDOM.nextInt(900000)); // 6-digit
+        log.info("Generating OTP (dev mode: {})", isDev);
+        return isDev? String.valueOf(123456): String.valueOf(100000 + RANDOM.nextInt(900000)); // 6-digit
     }
 
     private String maskPhoneNumber(String phoneNumber) {

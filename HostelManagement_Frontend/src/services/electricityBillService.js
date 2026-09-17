@@ -12,6 +12,11 @@ class ElectricityBillService {
     return response.data
   }
 
+  async updateElectricityAccount(accountId, accountData) {
+    const response = await apiClient.put(`/api/electricity/accounts/${accountId}`, accountData)
+    return response.data
+  }
+
   // Electricity Bill Management
   async createElectricityBills(billsData) {
     const response = await apiClient.post('/api/electricity/bills', billsData)

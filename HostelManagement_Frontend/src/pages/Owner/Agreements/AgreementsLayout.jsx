@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import AgreementStepper from './AgreementStepper'
 import AgreementList from './AgreementList'
@@ -7,19 +8,42 @@ export default function AgreementsLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const isCreating = pathname.includes('/create')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Agreement operations"
         title="Agreements"
-        description="Manage tenant onboarding agreements, creation flows, and status tracking from a cleaner interface."
-        action={isCreating ? null : <Button label="Create agreement" onClick={() => navigate('/owner/agreements/create')} />}
-        secondaryAction={isCreating ? <Button label="Back to Dashboard" variant="secondary" onClick={() => navigate('/owner/dashboard')} /> : null}
+        toolbar={isCreating ? (
+          <Button label="Back to Dashboard" variant="secondary" onClick={() => navigate('/owner/dashboard')} />
+        ) : (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search agreements..."
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 sm:w-56"
+            />
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="Filter agreements"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+              <option value="ALL">Filter</option>
+              <option value="ACTIVE">Active</option>
+              <option value="PENDING_TENANT_ACTION">Pending</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+            <Button label="Create agreement" onClick={() => navigate('/owner/agreements/create')} />
+          </div>
+        )}
       />
 
       <Routes>
-        <Route path="/" element={<AgreementList />} />
+        <Route path="/" element={<AgreementList searchQuery={searchQuery} statusFilter={statusFilter} />} />
         <Route path="/create" element={<AgreementStepper />} />
       </Routes>
     </div>

@@ -37,6 +37,16 @@ public class ElectricityBillController {
         return ResponseEntity.ok(accounts);
     }
 
+    @PutMapping("/accounts/{accountId}")
+    public ResponseEntity<ElectricityAccountDto> updateElectricityAccount(
+            @PathVariable UUID accountId,
+            @Valid @RequestBody CreateElectricityAccountRequest request) {
+        User currentUser = ApplicationContext.getUser();
+        ElectricityAccountDto account = electricityBillService.updateElectricityAccount(
+                accountId, request, currentUser.getUserId());
+        return ResponseEntity.ok(account);
+    }
+
     // Electricity Bill Management
     @PostMapping("/bills")
     public ResponseEntity<List<ElectricityBillDto>> createElectricityBills(

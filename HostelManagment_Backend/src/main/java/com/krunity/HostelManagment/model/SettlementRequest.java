@@ -82,6 +82,11 @@ public class SettlementRequest {
     @Column(name = "final_settlement_amount", precision = 10, scale = 2)
     private BigDecimal finalSettlementAmount;
 
+    // Credit already used to reduce the activation amount of a linked extension.
+    @Column(name = "extension_credit_applied", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal extensionCreditApplied = BigDecimal.ZERO;
+
     // Settlement Type: TENANT_PAYABLE (negative) or OWNER_PAYABLE (positive)
     @Column(name = "settlement_type", length = 20)
     private String settlementType;

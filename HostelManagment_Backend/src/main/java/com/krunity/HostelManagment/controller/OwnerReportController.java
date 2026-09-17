@@ -75,7 +75,8 @@ public class OwnerReportController {
      * Used by the owner to view a tenant's complete payment history.
      */
     @GetMapping("/tenant/{tenantId}/payment-history")
-    public ResponseEntity<?> getTenantPaymentHistory(@PathVariable String tenantId) {
+    public ResponseEntity<?> getTenantPaymentHistory(@PathVariable String tenantId,
+                                                      @RequestParam(required = false) String planId) {
         try {
             User owner = ApplicationContext.getUser();
             if (!"OWNER".equals(owner.getRole().getName())) {
@@ -89,8 +90,14 @@ public class OwnerReportController {
                 return ResponseEntity.badRequest().body("Invalid tenant ID format");
             }
 
+            TenantPaymentPlan plan = planId == null
+                    ? paymentPlanRepository.findByTenant_UserIdAndIsActiveTrue(tenantUuid)
+                        .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"))
+                    : paymentPlanRepository.findById(UUID.fromString(planId))
+                        .filter(candidate -> candidate.getTenant().getUserId().equals(tenantUuid))
+                        .orElseThrow(() -> new NotFoundException("Payment plan not found for tenant"));
             com.krunity.HostelManagment.dto.PaymentLedgerResponse ledger =
-                    paymentScheduleService.getTenantLedger(tenantUuid);
+                    paymentScheduleService.getPaymentPlanLedger(plan);
             return ResponseEntity.ok(ledger);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(e.getMessage());
@@ -102,7 +109,8 @@ public class OwnerReportController {
      * Returns pending installments for a specific tenant that the owner can collect payment for
      */
     @GetMapping("/tenant/{tenantId}/installments")
-    public ResponseEntity<?> getTenantInstallments(@PathVariable String tenantId) {
+    public ResponseEntity<?> getTenantInstallments(@PathVariable String tenantId,
+                                                    @RequestParam(required = false) String planId) {
         try {
             User owner = ApplicationContext.getUser();
             log.debug("Owner accessing installments - ID: {}, Role: {}", owner.getUserId(), owner.getRole().getName());
@@ -124,8 +132,12 @@ public class OwnerReportController {
             }
             
             // Get tenant's payment plan
-            TenantPaymentPlan plan = paymentPlanRepository.findByTenant_UserIdAndIsActiveTrue(tenantUuid)
-                    .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"));
+            TenantPaymentPlan plan = planId == null
+                    ? paymentPlanRepository.findByTenant_UserIdAndIsActiveTrue(tenantUuid)
+                        .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"))
+                    : paymentPlanRepository.findById(UUID.fromString(planId))
+                        .filter(candidate -> candidate.getTenant().getUserId().equals(tenantUuid))
+                        .orElseThrow(() -> new NotFoundException("Payment plan not found for tenant"));
             
             // Get pending/overdue installments ordered by priority (OVERDUE first, then PARTIALLY_PAID, then SCHEDULED)
             List<PaymentRequestSchedule> installments = scheduleRepository

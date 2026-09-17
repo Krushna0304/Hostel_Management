@@ -20,9 +20,17 @@ const PaymentSettings = () => {
     try {
       setCashLoading(true)
       const data = await cashPaymentSettingsService.getSettings()
-      setCashSettings(data)
+      // Extra safety check - ensure it's always an array
+      if (Array.isArray(data)) {
+        setCashSettings(data)
+      } else if (data && typeof data === 'object' && Array.isArray(data.data)) {
+        setCashSettings(data.data)
+      } else {
+        setCashSettings([])
+      }
     } catch (error) {
       console.error('Failed to load cash payment settings:', error)
+      setCashSettings([])
     } finally {
       setCashLoading(false)
     }
@@ -30,13 +38,13 @@ const PaymentSettings = () => {
 
   const handleToggleCash = async (method, nextAllowed) => {
     // optimistic update
-    setCashSettings((prev) => prev.map((s) => (s.method === method ? { ...s, allowed: nextAllowed } : s)))
+    setCashSettings((prev) => Array.isArray(prev) ? prev.map((s) => (s.method === method ? { ...s, allowed: nextAllowed } : s)) : [])
     try {
       setSavingMethod(method)
       await cashPaymentSettingsService.updateSetting(method, nextAllowed)
     } catch (error) {
       // revert on failure
-      setCashSettings((prev) => prev.map((s) => (s.method === method ? { ...s, allowed: !nextAllowed } : s)))
+      setCashSettings((prev) => Array.isArray(prev) ? prev.map((s) => (s.method === method ? { ...s, allowed: !nextAllowed } : s)) : [])
       console.error('Failed to update cash payment setting:', error)
     } finally {
       setSavingMethod(null)
@@ -213,7 +221,7 @@ const PaymentSettings = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
         <div className="max-w-4xl mx-auto">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
@@ -225,7 +233,7 @@ const PaymentSettings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         <PageHeader
           title="Payment Settings"
@@ -288,7 +296,7 @@ const PaymentSettings = () => {
 
         {/* Account Verification Card */}
         <Card>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
               Account Verification
             </h2>
@@ -324,14 +332,17 @@ const PaymentSettings = () => {
                 disabled={config?.mcpOverrideDisabled}
               />
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <Button
                   onClick={handleTestConnection}
                   disabled={testLoading || !credentials.keyId || !credentials.keySecret || config?.mcpOverrideDisabled}
                   variant="secondary"
-                  className="flex-1"
+                  size="md"
+                  className="flex-1 min-w-0 h-11"
                 >
-                  {testLoading ? 'Testing...' : '🔍 Validate Credentials'}
+                  <span className="truncate">
+                    {testLoading ? 'Testing...' : '🔍 Validate Credentials'}
+                  </span>
                 </Button>
 
                 <Button
@@ -344,9 +355,17 @@ const PaymentSettings = () => {
                     config?.mcpOverrideDisabled
                   }
                   variant="primary"
-                  className="flex-1"
+                  size="md"
+                  className="flex-1 min-w-0 h-11"
                 >
-                  {saveLoading ? 'Activating...' : '✓ Save & Activate Payments'}
+                  <span className="truncate">
+                    {saveLoading ? 'Activating...' : (
+                      <>
+                        <span className="hidden sm:inline">✓ Save & Activate Payments</span>
+                        <span className="sm:hidden">✓ Save & Activate</span>
+                      </>
+                    )}
+                  </span>
                 </Button>
               </div>
 
@@ -369,27 +388,35 @@ const PaymentSettings = () => {
                 <Button
                   onClick={() => setShowDeactivateConfirm(true)}
                   variant="danger"
+                  size="md"
+                  className="min-w-0 h-11"
                 >
-                  Deactivate Payments
+                  <span className="truncate">Deactivate Payments</span>
                 </Button>
               ) : (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-800 mb-3">
                     ⚠️ Are you sure you want to deactivate payments? Tenants won't be able to pay online until you reactivate.
                   </p>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <Button
                       onClick={handleDeactivate}
                       disabled={deactivateLoading}
                       variant="danger"
+                      size="md"
+                      className="min-w-0 h-11"
                     >
-                      {deactivateLoading ? 'Deactivating...' : 'Yes, Deactivate'}
+                      <span className="truncate">
+                        {deactivateLoading ? 'Deactivating...' : 'Yes, Deactivate'}
+                      </span>
                     </Button>
                     <Button
                       onClick={() => setShowDeactivateConfirm(false)}
                       variant="secondary"
+                      size="md"
+                      className="min-w-0 h-11"
                     >
-                      Cancel
+                      <span className="truncate">Cancel</span>
                     </Button>
                   </div>
                 </div>
@@ -413,7 +440,7 @@ const PaymentSettings = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {cashSettings.map((s) => (
+                {Array.isArray(cashSettings) && cashSettings.map((s) => (
                   <div
                     key={s.method}
                     className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"

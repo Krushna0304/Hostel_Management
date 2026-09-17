@@ -3,6 +3,8 @@ package com.krunity.HostelManagment.enums;
 public enum AgreementStatus {
     DRAFT,
     PENDING_TENANT_ACTION,
+    // Tenant signed an extension; it starts only after the preceding agreement settles.
+    PENDING_PREVIOUS_SETTLEMENT,
     ACTIVE,
     REJECTED,
     CLOSED,

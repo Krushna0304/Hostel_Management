@@ -243,7 +243,7 @@ const Rooms = () => {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Room</p>
+                        {/* <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Room</p> */}
                         <h3 className="mt-2 text-xl font-semibold text-slate-950">{room.roomNumber}</h3>
                       </div>
                       <div className="flex flex-col items-end gap-2">

@@ -25,6 +25,7 @@ const OwnerElectricityBills = lazy(() => import('./pages/Owner/ElectricityBills'
 const OwnerSettlements = lazy(() => import('./pages/Owner/Settlements'))
 const TenantActivatePage = lazy(() => import('./pages/Tenant/Activate/TenantActivatePage'))
 const TenantDashboard = lazy(() => import('./pages/Tenant/Dashboard'))
+const TenantAgreements = lazy(() => import('./pages/Tenant/Agreements'))
 const TenantOtherCharges = lazy(() => import('./pages/Tenant/OtherCharges'))
 const TenantElectricityBills = lazy(() => import('./pages/Tenant/ElectricityBills'))
 const TenantSettlements = lazy(() => import('./pages/Tenant/Settlements'))
@@ -102,6 +103,7 @@ function App() {
               }
             >
               <Route path="dashboard" element={<TenantDashboard />} />
+              <Route path="agreements" element={<TenantAgreements />} />
               <Route path="other-charges" element={<TenantOtherCharges />} />
               <Route path="electricity-bills" element={<TenantElectricityBills />} />
               <Route path="settlements" element={<TenantSettlements />} />

@@ -15,6 +15,7 @@ import { otherChargeService } from '../../services/otherChargeService'
 import CreateOtherChargeModal from '../../components/CreateOtherChargeModal'
 import OtherChargeDetailsModal from '../../components/OtherChargeDetailsModal'
 import OtherChargeHistoryModal from '../../components/OtherChargeHistoryModal'
+import { OtherChargeCards } from '../../components/OtherChargeViews'
 
 export default function OtherCharges() {
   const [charges, setCharges] = useState([])
@@ -226,17 +227,61 @@ export default function OtherCharges() {
     return matchesSearch && hasMatchingCharges
   })
 
+  const filteredCharges = charges.filter((charge) => {
+    const query = searchQuery.toLowerCase()
+    const matchesSearch = charge.chargeName?.toLowerCase().includes(query) ||
+      charge.description?.toLowerCase().includes(query) ||
+      charge.tenantName?.toLowerCase().includes(query) ||
+      charge.roomNumber?.toLowerCase().includes(query) ||
+      charge.hostelName?.toLowerCase().includes(query)
+    const matchesStatus = filterStatus === 'ALL' ||
+      (filterStatus === 'PENDING' && charge.paymentStatus !== 'COMPLETED') ||
+      (filterStatus === 'COMPLETED' && charge.paymentStatus === 'COMPLETED') ||
+      charge.paymentStatus === filterStatus
+    return matchesSearch && matchesStatus && (filterCategory === 'ALL' || charge.category === filterCategory)
+  })
+
   const fmt = (amount) => `₹${(amount || 0).toLocaleString()}`
 
   return (
     <div className="space-y-6">
       <PageHeader 
-        title="Other Charges Collection" 
-        subtitle="Per-tenant breakdown of additional charges, payment status, and outstanding amounts"
-        action={
-          <Button onClick={handleCreateCharge} className="bg-sky-600 hover:bg-sky-700 text-white">
-            + Create New Charge
-          </Button>
+        title="Other Charges" 
+        toolbar={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="search"
+              placeholder="Search charges..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 sm:w-56"
+            />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              aria-label="Filter charges"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+              <option value="ALL">Filter</option>
+              <option value="PENDING">Pending</option>
+              <option value="PARTIALLY_PAID">Partially paid</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="OVERDUE">Overdue</option>
+            </select>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              aria-label="Filter charge category"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+              <option value="ALL">All categories</option>
+              <option value="OTHER_CHARGE_TENANT">Tenant specific</option>
+              <option value="OTHER_CHARGE_ROOM">Room based</option>
+            </select>
+            <Button onClick={handleCreateCharge} className="bg-sky-600 hover:bg-sky-700 text-white">
+              + Create Charge
+            </Button>
+          </div>
         }
       />
 
@@ -245,7 +290,7 @@ export default function OtherCharges() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           title="Total Charges"
           value={stats.totalCharges}
@@ -276,47 +321,23 @@ export default function OtherCharges() {
         />
       </div>
 
-      {/* Search and Filter */}
+      {/* Tenant-specific Table */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Search by tenant name, hostel, or room..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
-            </div>
-            
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              <option value="ALL">All Status</option>
-              <option value="PENDING">Pending</option>
-              <option value="PARTIALLY_PAID">Partially Paid</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="OVERDUE">Overdue</option>
-            </select>
-            
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              <option value="ALL">All Categories</option>
-              <option value="OTHER_CHARGE_TENANT">Tenant Specific</option>
-              <option value="OTHER_CHARGE_ROOM">Room Based</option>
-            </select>
-          </div>
+        <CardHeader className="border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-slate-950">Other charges</h2>
+          <p className="text-sm text-slate-600 mt-1">Additional charges applied to tenants and rooms with payment status.</p>
+        </CardHeader>
+        <CardContent>
+          <OtherChargeCards
+            loading={loading}
+            charges={filteredCharges}
+            onDetails={(charge) => { setSelectedCharge(charge); setShowDetailsModal(true) }}
+            onCollect={(charge) => { setSelectedCharge(charge); setShowDetailsModal(true) }}
+          />
         </CardContent>
       </Card>
 
-      {/* Tenant-specific Table */}
-      <Card>
+      {false && <Card>
         <CardHeader className="border-b border-slate-100">
           <h2 className="text-lg font-semibold text-slate-950">
             Other charges collection
@@ -406,7 +427,7 @@ export default function OtherCharges() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Modals */}
       {showCreateModal && (

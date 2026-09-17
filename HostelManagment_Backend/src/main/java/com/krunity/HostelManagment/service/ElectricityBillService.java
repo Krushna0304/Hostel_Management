@@ -101,6 +101,33 @@ public class ElectricityBillService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public ElectricityAccountDto updateElectricityAccount(
+            UUID accountId, CreateElectricityAccountRequest request, UUID ownerId) {
+        ElectricityAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new NotFoundException("Electricity account not found"));
+
+        if (!account.getOwnerId().equals(ownerId)) {
+            throw new ConflictException("You can only update your own electricity accounts");
+        }
+
+        if (!account.getRoomId().equals(request.getRoomId())) {
+            throw new ConflictException("An electricity account cannot be reassigned to a different room");
+        }
+
+        accountRepository.findByAccountNumberAndIsActiveTrue(request.getAccountNumber())
+                .filter(existingAccount -> !existingAccount.getAccountId().equals(accountId))
+                .ifPresent(existingAccount -> {
+                    throw new ConflictException("Account number already exists");
+                });
+
+        account.setAccountNumber(request.getAccountNumber());
+        ElectricityAccount savedAccount = accountRepository.save(account);
+        Room room = roomRepository.findById(savedAccount.getRoomId())
+                .orElseThrow(() -> new NotFoundException("Room not found"));
+        return mapToAccountDto(savedAccount, room);
+    }
+
     // Electricity Bill Management
     @Transactional
     public List<ElectricityBillDto> createElectricityBills(CreateElectricityBillsRequest request, UUID ownerId) {
@@ -471,6 +498,7 @@ public class ElectricityBillService {
     /** Owner-facing bill: amounts reflect the whole bill across all tenant shares. */
     private ElectricityBillDto mapToBillDto(ElectricityBill bill) {
         return baseBillDto(bill)
+                .tenantCount(Math.toIntExact(paymentRepository.countByBillId(bill.getBillId())))
                 .totalAmount(bill.getTotalAmount())
                 .paidAmount(bill.getPaidAmount())
                 .remainingAmount(bill.getRemainingAmount())

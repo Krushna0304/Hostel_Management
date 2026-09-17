@@ -21,6 +21,9 @@ public class AgreementResponse {
     private BigDecimal rent;
     private BigDecimal deposit;
     private BigDecimal refundableAmount;
+    // Present only for an extension; the backend-calculated amount payable now.
+    private BigDecimal activationPayableAmount;
+    private BigDecimal previousAgreementRefundableCredit;
     private BigDecimal cleaningCharges;
     private BigDecimal maintenanceCharges;
     private String lightBillPolicy;
@@ -31,6 +34,7 @@ public class AgreementResponse {
     private String qrToken;
     private Instant qrExpiry;
     private Boolean qrUsed;
+    private Boolean isAccepted;
     private Instant createdAt;
     private Instant activatedAt;
     

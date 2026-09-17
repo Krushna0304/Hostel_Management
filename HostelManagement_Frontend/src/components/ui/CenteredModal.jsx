@@ -32,7 +32,7 @@ export default function CenteredModal({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 ${overlayClassName}`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto p-4 ${overlayClassName}`}
       onClick={onClose}
       role="presentation"
     >

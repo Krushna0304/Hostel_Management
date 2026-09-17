@@ -6,9 +6,8 @@ import Skeleton from './ui/Skeleton'
 import EmptyState from './ui/EmptyState'
 import extensionService from '../services/extensionService'
 
-// Status flow: PENDING → APPROVED → PAYMENT_DONE (happy path)
-//              PENDING → REJECTED (terminal rejection)
-const STATUS_STEPS = ['PENDING', 'APPROVED', 'PAYMENT_DONE']
+// A signed extension remains pending until the preceding agreement settles.
+const STATUS_STEPS = ['PENDING', 'APPROVED', 'AGREEMENT_CREATED', 'PREVIOUS_SETTLED', 'ACTIVE']
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -29,7 +28,25 @@ const STATUS_CONFIG = {
     description: 'Approved — payment required',
     icon: '💳',
   },
-  PAYMENT_DONE: {
+  APPROVED_PENDING_PAYMENT: {
+    label: 'Approved',
+    variant: 'info',
+    description: 'Approved — activate your new agreement to pay',
+    icon: '✅',
+  },
+  AGREEMENT_CREATED: {
+    label: 'Agreement Signed',
+    variant: 'info',
+    description: 'Waiting for the previous agreement settlement',
+    icon: '📝',
+  },
+  PREVIOUS_SETTLED: {
+    label: 'Previous Settled',
+    variant: 'info',
+    description: 'Previous agreement settlement is complete',
+    icon: '✓',
+  },
+  ACTIVE: {
     label: 'Active',
     variant: 'success',
     description: 'Extension is active',
@@ -43,11 +60,12 @@ const STATUS_CONFIG = {
   },
 }
 
-/** Map any backend status onto the 3-step timeline (PENDING → APPROVED → PAYMENT_DONE) */
+/** Map backend status onto the extension → settlement → activation timeline. */
 function getStepIndex(status) {
   if (!status) return 0
-  if (status === 'PAYMENT_DONE') return 2
-  if (status === 'APPROVED' || status === 'PAYMENT_PENDING') return 1
+  if (status === 'ACTIVE' || status === 'PAYMENT_DONE') return 4
+  if (status === 'AGREEMENT_CREATED' || status === 'PAYMENT_COMPLETED') return 2
+  if (status === 'APPROVED' || status === 'PAYMENT_PENDING' || status === 'APPROVED_PENDING_PAYMENT') return 1
   return 0 // PENDING or unknown
 }
 
@@ -110,7 +128,7 @@ function StatusTimeline({ status }) {
             {idx < STATUS_STEPS.length - 1 && (
               <div
                 className={[
-                  'h-0.5 w-8 sm:w-12 mx-1 mb-4 transition-all',
+                  'h-0.5 w-5 sm:w-8 mx-1 mb-4 transition-all',
                   idx < currentStep ? 'bg-emerald-400' : 'bg-slate-200',
                 ].join(' ')}
               />
@@ -125,7 +143,10 @@ function StatusTimeline({ status }) {
 function ExtensionRequestCard({ request, onPayNow }) {
   const formatDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
 
-  const needsPayment = request.status === 'APPROVED' || request.status === 'PAYMENT_PENDING'
+  const needsActivation = request.status === 'APPROVED_PENDING_PAYMENT' && request.activationToken
+  const activationUrl = needsActivation
+    ? `${window.location.origin}/tenant/activate?token=${encodeURIComponent(request.activationToken)}`
+    : null
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
@@ -167,16 +188,23 @@ function ExtensionRequestCard({ request, onPayNow }) {
         )}
         {request.totalAmount != null && (
           <div>
-            <span className="text-slate-400 font-medium block">Amount</span>
-            <span className={needsPayment ? 'font-semibold text-sky-700' : ''}>
+            <span className="text-slate-400 font-medium block">Activation payable</span>
+            <span className={needsActivation ? 'font-semibold text-sky-700' : ''}>
               ₹{Number(request.totalAmount).toLocaleString()}
             </span>
           </div>
         )}
       </div>
 
+      {Number(request.previousAgreementRefundableAmount || 0) > 0 && (
+        <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          Previous agreement refundable credit: ₹{Number(request.previousAgreementRefundableAmount).toLocaleString()}.
+          {' '}It has been adjusted against the new agreement activation amount.
+        </div>
+      )}
+
       {/* Payment deadline warning */}
-      {needsPayment && request.expiresAt && (
+      {needsActivation && request.expiresAt && (
         <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700">
           ⚠️ Payment deadline: {new Date(request.expiresAt).toLocaleString('en-IN')}
         </div>
@@ -193,14 +221,15 @@ function ExtensionRequestCard({ request, onPayNow }) {
       {/* Status timeline */}
       <StatusTimeline status={request.status} />
 
-      {/* Pay Now CTA */}
-      {needsPayment && onPayNow && (
+      {/* New agreement activation and payment */}
+      {activationUrl && (
         <div className="pt-1">
-          <Button
-            label="Pay Now"
-            fullWidth
-            onClick={() => onPayNow(request)}
-          />
+          <a href={activationUrl} className="block rounded-2xl bg-slate-950 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-800">
+            Activate Agreement & Pay
+          </a>
+          <a href={activationUrl} className="mt-2 block break-all text-center text-xs text-sky-700 underline">
+            {activationUrl}
+          </a>
         </div>
       )}
     </div>

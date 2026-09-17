@@ -17,6 +17,7 @@ import com.krunity.HostelManagment.model.Floor;
 import com.krunity.HostelManagment.model.Hostel;
 import com.krunity.HostelManagment.service.AgreementService;
 import com.krunity.HostelManagment.service.RoomAgreementPlanService;
+import com.krunity.HostelManagment.repository.ExtendAllotmentRequestRepository;
 import com.krunity.HostelManagment.repository.UserRepository;
 import com.krunity.HostelManagment.repository.RoomRepository;
 import com.krunity.HostelManagment.repository.FloorRepository;
@@ -54,6 +55,9 @@ public class AgreementController {
     
     @Autowired
     private RoomAgreementPlanService planService;
+
+    @Autowired
+    private ExtendAllotmentRequestRepository extendAllotmentRequestRepository;
 
     @PostMapping("/room")
     public ResponseEntity<QrActivationResponse> createRoomAgreement(
@@ -93,7 +97,12 @@ public class AgreementController {
             return ResponseEntity.notFound().build();
         }
         
-        AgreementResponse response = AgreementMapper.toResponse(agreementOpt.get());
+        Agreement agreement = agreementOpt.get();
+        AgreementResponse response = AgreementMapper.toResponse(agreement);
+        extendAllotmentRequestRepository.findByNewAgreementId(agreement.getId()).ifPresent(request -> {
+            response.setActivationPayableAmount(request.getTotalAmount());
+            response.setPreviousAgreementRefundableCredit(request.getPreviousAgreementRefundableAmount());
+        });
         return ResponseEntity.ok(response);
     }
 

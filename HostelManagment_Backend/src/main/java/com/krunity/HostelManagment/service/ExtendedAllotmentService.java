@@ -56,6 +56,9 @@ public class ExtendedAllotmentService {
     @Autowired
     private RoomAgreementPlanService roomAgreementPlanService;
 
+    @Autowired
+    private PaymentCalculationService paymentCalculationService;
+
     // ─── Extension Request Creation ──────────────────────────────────────────
 
     /**
@@ -91,8 +94,10 @@ public class ExtendedAllotmentService {
             User owner = userRepository.findById(currentAgreement.getOwnerId())
                     .orElseThrow(() -> new NotFoundException("Owner not found"));
 
-            // Calculate extension dates (seamless transition)
-            LocalDate extensionStartDate = currentAllotment.getEndDate();
+            // Agreement end dates are inclusive everywhere in the tenant UI and
+            // settlement workflow. Starting an extension on the same date would
+            // therefore make both agreements current for one day.
+            LocalDate extensionStartDate = currentAllotment.getEndDate().plusDays(1);
             LocalDate extensionEndDate = calculateExtensionEndDate(extensionStartDate, requestDto.getPlanId());
 
             // Validate no overlap with existing agreements
@@ -101,7 +106,17 @@ public class ExtendedAllotmentService {
 
             // Calculate amounts
             BigDecimal activationAmount = calculateActivationAmount(requestDto.getPlanId());
-            BigDecimal settlementAdjustment = calculateSettlementAdjustment(currentAgreement, currentAllotment);
+            // Apply X only when this is genuinely an extension of an active
+            // agreement. Without a prior active agreement there is no deposit
+            // credit to carry forward, so the new activation is charged in full.
+            BigDecimal previousRefundableAmount = currentAgreement.getStatus()
+                    == com.krunity.HostelManagment.enums.AgreementStatus.ACTIVE
+                    ? paymentCalculationService
+                        .calculatePaymentBreakdown(currentAgreement.getPlanSnapshot())
+                        .getAgreementTimeRefundable()
+                    : BigDecimal.ZERO;
+            // A credit can never make the extension activation charge negative.
+            BigDecimal appliedCredit = previousRefundableAmount.min(activationAmount);
             
             // Create extension request
             ExtendAllotmentRequest extensionRequest = ExtendAllotmentRequest.builder()
@@ -114,8 +129,12 @@ public class ExtendedAllotmentService {
                     .extensionEndDate(extensionEndDate)
                     .status(ExtendAllotmentStatus.PENDING_OWNER_APPROVAL)
                     .activationAmount(activationAmount)
-                    .settlementAdjustment(settlementAdjustment)
+                    .activationAmountBeforeAdjustment(activationAmount)
+                    .previousAgreementRefundableAmount(appliedCredit)
+                    // Kept for backward-compatible API clients; it is the negative X credit.
+                    .settlementAdjustment(appliedCredit.negate())
                     .tenantNotes(requestDto.getTenantNotes())
+                    .createdAt(LocalDateTime.now())
                     .build();
 
             // Calculate total amount
@@ -162,10 +181,12 @@ public class ExtendedAllotmentService {
             // Update final activation amount if provided
             if (approvalDto.getFinalActivationAmount() != null) {
                 extensionRequest.setActivationAmount(approvalDto.getFinalActivationAmount());
+                extensionRequest.setActivationAmountBeforeAdjustment(approvalDto.getFinalActivationAmount());
                 extensionRequest.calculateTotalAmount();
             }
 
-            // Create new agreement in DRAFT status
+            // Create the agreement ready for the tenant's normal review-and-pay
+            // flow. The dashboard already uses this token to open /tenant/activate.
             String newAgreementId = createNewDraftAgreement(extensionRequest);
             extensionRequest.setNewAgreementId(newAgreementId);
 
@@ -228,11 +249,10 @@ public class ExtendedAllotmentService {
             activateNewAgreement(extensionRequest);
             extensionRequest.updateStatus(ExtendAllotmentStatus.AGREEMENT_CREATED);
 
-            // Create new room allotment
-            createNewRoomAllotment(extensionRequest);
-
-            // Update extension request to active
-            extensionRequest.updateStatus(ExtendAllotmentStatus.ACTIVE);
+            // The tenant must still accept the generated agreement. The normal
+            // agreement acceptance endpoint creates the extension allotment
+            // atomically, so a future agreement can never become operational
+            // merely because this payment endpoint was called.
 
             // Save extension request
             extensionRequest = extendRequestRepository.save(extensionRequest);
@@ -328,12 +348,12 @@ public class ExtendedAllotmentService {
      * @param planId The plan ID for the extension
      * @return The calculated extension end date
      */
-    private LocalDate calculateExtensionEndDate(LocalDate startDate, UUID planId) {
+    private LocalDate calculateExtensionEndDate(LocalDate startDate, String planId) {
         log.debug("Calculating extension end date for plan {} starting from {}", planId, startDate);
         
         try {
             // Get the plan details
-            RoomAgreementPlan plan = roomAgreementPlanService.getPlanById(planId.toString());
+            RoomAgreementPlan plan = roomAgreementPlanService.getPlanById(planId);
             
             // Get duration configuration from plan
             Duration duration = plan.getDuration();
@@ -434,10 +454,9 @@ public class ExtendedAllotmentService {
                 tenant.getUserId(), startDate, endDate);
     }
 
-    private BigDecimal calculateActivationAmount(UUID planId) {
-        // This would get plan details and calculate activation amount
-        // For now, return a default amount
-        return BigDecimal.valueOf(5000.00); // Default activation amount
+    private BigDecimal calculateActivationAmount(String planId) {
+        RoomAgreementPlan plan = roomAgreementPlanService.getPlanById(planId);
+        return paymentCalculationService.calculatePaymentBreakdown(plan).getTotalAgreementTime();
     }
 
     private BigDecimal calculateSettlementAdjustment(Agreement agreement, RoomAllotment allotment) {
@@ -451,20 +470,23 @@ public class ExtendedAllotmentService {
         
         try {
             // Get the plan details
-            RoomAgreementPlan planSnapshot = roomAgreementPlanService.getPlanById(extensionRequest.getNewPlanId().toString());
+            RoomAgreementPlan planSnapshot = roomAgreementPlanService.getPlanById(extensionRequest.getNewPlanId());
             
             // Create new agreement for extension
             Agreement newAgreement = Agreement.builder()
-                    .type(com.krunity.HostelManagment.enums.AgreementType.ROOM) // Extensions are for room agreements
+                    .type(com.krunity.HostelManagment.enums.AgreementType.PG_ROOM) // Extensions are for PG room agreements
                     .userId(extensionRequest.getTenant().getUserId())
                     .roomId(extensionRequest.getCurrentRoom().getRoomId())
                     .ownerId(extensionRequest.getOwner().getUserId())
-                    .planId(extensionRequest.getNewPlanId().toString())
+                    .planId(extensionRequest.getNewPlanId())
                     .planSnapshot(planSnapshot)
                     .startDate(extensionRequest.getExtensionStartDate())
                     .endDate(extensionRequest.getExtensionEndDate())
-                    .status(com.krunity.HostelManagment.enums.AgreementStatus.DRAFT) // Start in DRAFT status
+                    .status(com.krunity.HostelManagment.enums.AgreementStatus.PENDING_TENANT_ACTION)
+                    .qrToken(generateQrToken())
+                    .qrExpiry(java.time.Instant.now().plus(72, java.time.temporal.ChronoUnit.HOURS))
                     .qrUsed(false)
+                    .isAccepted(false)
                     .createdAt(java.time.Instant.now())
                     .build();
             

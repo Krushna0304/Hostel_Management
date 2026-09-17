@@ -99,6 +99,12 @@ export const tenantNavigation = [
     description: 'Payment schedule and dues',
   },
   {
+    label: 'My Agreements',
+    to: '/tenant-portal/agreements',
+    icon: 'document',
+    description: 'Current, upcoming, and previous agreements',
+  },
+  {
     label: 'Other Charges',
     to: '/tenant-portal/other-charges',
     icon: 'receipt',

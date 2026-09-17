@@ -3,6 +3,7 @@ package com.krunity.HostelManagment.dto;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -30,4 +31,7 @@ public class TenantDashboardResponse {
 
     // Next due installment
     private InstallmentResponse nextDueInstallment;
+
+    // Full schedule for the agreement selected for this dashboard.
+    private List<InstallmentResponse> installments;
 }

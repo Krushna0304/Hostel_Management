@@ -16,6 +16,8 @@ const Hostels = () => {
   const [hostels, setHostels] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortOrder, setSortOrder] = useState('RECENT')
 
   useEffect(() => {
     fetchHostels()
@@ -59,18 +61,40 @@ const Hostels = () => {
     }
   }
 
+  const visibleHostels = hostels
+    .filter((hostel) => {
+      const query = searchQuery.trim().toLowerCase()
+      return !query || hostel.hostelName?.toLowerCase().includes(query) || hostel.hostelAddress?.toLowerCase().includes(query)
+    })
+    .sort((a, b) => sortOrder === 'AZ'
+      ? (a.hostelName || '').localeCompare(b.hostelName || '')
+      : 0)
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Property Management"
-        title="Your Hostels"
+        title="Hostels"
         description="Manage all your hostel properties from one place. Add new hostels, view existing ones, and navigate to floors and rooms."
-        action={
-          <Button 
-            label="Add hostel" 
-            icon={<BuildingIcon className="h-4 w-4" />}
-            onClick={() => navigate('/owner/hostels/create-hostel')} 
-          />
+        toolbar={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search hostels..."
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 sm:w-56"
+            />
+            <select
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value)}
+              aria-label="Filter hostels"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+              <option value="RECENT">Filter</option>
+              <option value="AZ">Name: A–Z</option>
+            </select>
+            <Button label="Add hostel" icon={<BuildingIcon className="h-4 w-4" />} onClick={() => navigate('/owner/hostels/create-hostel')} />
+          </div>
         }
       />
 
@@ -90,11 +114,16 @@ const Hostels = () => {
               <Skeleton key={index} className="h-64 rounded-3xl" />
             ))}
           </div>
-        ) : hostels.length > 0 ? (
+        ) : hostels.length > 0 && visibleHostels.length > 0 ? (
           <HostelList
-            hostels={hostels}
+            hostels={visibleHostels}
             onHostelClick={handleHostelClick}
             onCreateHostel={handleCreateHostel}
+          />
+        ) : hostels.length > 0 ? (
+          <EmptyState
+            title="No matching hostels"
+            description="Try a different search term or filter to find a property."
           />
         ) : (
           <EmptyState

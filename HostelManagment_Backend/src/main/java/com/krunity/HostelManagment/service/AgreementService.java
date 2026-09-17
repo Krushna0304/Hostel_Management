@@ -6,6 +6,7 @@ import com.krunity.HostelManagment.dto.QrActivationResponse;
 import com.krunity.HostelManagment.model.Agreement;
 import com.krunity.HostelManagment.enums.AgreementStatus;
 import com.krunity.HostelManagment.enums.AgreementType;
+import com.krunity.HostelManagment.enums.ExtendAllotmentStatus;
 import com.krunity.HostelManagment.enums.RoomType;
 import com.krunity.HostelManagment.repository.AgreementRepository;
 import com.krunity.HostelManagment.enums.PaymentFrequency;
@@ -16,6 +17,8 @@ import com.krunity.HostelManagment.exception.ConflictException;
 import com.krunity.HostelManagment.exception.NotFoundException;
 import com.krunity.HostelManagment.model.*;
 import com.krunity.HostelManagment.repository.*;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.ILoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class AgreementService {
     
@@ -53,6 +57,9 @@ public class AgreementService {
 
     @Autowired
     private RoomAllotmentRepository roomAllotmentRepository;
+
+    @Autowired
+    private ExtendAllotmentRequestRepository extendAllotmentRequestRepository;
     
     @Autowired
     private PaymentCalculationService paymentCalculationService;
@@ -88,7 +95,7 @@ public class AgreementService {
         
         // Validate room exists and has availability for the agreement start/end dates
         if (agreement.getRoomId() != null
-                && (agreement.getType() == AgreementType.ROOM || agreement.getType() == AgreementType.FLAT)) {
+                && (isPgRoomAgreement(agreement) || agreement.getType() == AgreementType.FLAT)) {
             roomRepository.findById(agreement.getRoomId())
                     .orElseThrow(() -> new NotFoundException("Room not found with ID: " + agreement.getRoomId()));
             LocalDate startDate = agreement.getStartDate() != null ? agreement.getStartDate() : LocalDate.now();
@@ -106,6 +113,7 @@ public class AgreementService {
         agreement.setStatus(AgreementStatus.PENDING_TENANT_ACTION);
         agreement.setCreatedAt(Instant.now());
         agreement.setQrUsed(false);
+        agreement.setIsAccepted(false);
         
         // Generate QR token
         String qrToken = generateQrToken();
@@ -117,7 +125,7 @@ public class AgreementService {
         // Resolve hostel and room info for SMS context
         String hostelName = "N/A";
         String roomNumber = "N/A";
-        if (agreement.getType() == AgreementType.ROOM && agreement.getRoomId() != null) {
+        if (isPgRoomAgreement(agreement) && agreement.getRoomId() != null) {
             try {
                 Room room = roomRepository.findById(agreement.getRoomId()).orElse(null);
                 if (room != null) {
@@ -214,6 +222,7 @@ public class AgreementService {
                 .qrToken(qrToken)
                 .qrExpiry(now.plus(QR_TOKEN_EXPIRY_HOURS, ChronoUnit.HOURS))
                 .qrUsed(false)
+                .isAccepted(false)
                 .createdAt(now)
                 .build();
 
@@ -301,17 +310,31 @@ public class AgreementService {
         User tenant = userRepository.findById(agreement.getUserId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
         
-        // Create payment artifacts
+        // Create payment artifacts. An extension is accepted through this same
+        // endpoint, but it must create a linked extension allotment rather than
+        // being discarded by the normal "tenant already has an allotment" guard.
+        Optional<ExtendAllotmentRequest> extensionRequest =
+                extendAllotmentRequestRepository.findByNewAgreementId(agreementId);
         TenantPaymentPlan paymentPlan = createPaymentPlan(agreement, tenant);
-        Transaction transaction = processPayment(agreement, tenant, paymentPlan, request);
-        createRoomAllotment(agreement, tenant, paymentPlan, transaction);
+        Transaction transaction = processPayment(agreement, tenant, paymentPlan, request,
+                extensionRequest.orElse(null));
+        if (extensionRequest.isPresent()) {
+            createExtensionRoomAllotment(extensionRequest.get(), paymentPlan, transaction);
+        } else {
+            createRoomAllotment(agreement, tenant, paymentPlan, transaction);
+        }
 
         // Generate installment schedule with activation transaction link
         paymentScheduleService.generateSchedule(paymentPlan, agreement.getPlanSnapshot(), transaction);
 
         // Update agreement
-        agreement.setStatus(AgreementStatus.ACTIVE);
+        // A signed extension must not replace the current agreement until that
+        // agreement's settlement payment has completed.
+        agreement.setStatus(extensionRequest.isPresent()
+                ? AgreementStatus.PENDING_PREVIOUS_SETTLEMENT
+                : AgreementStatus.ACTIVE);
         agreement.setQrUsed(true);
+        agreement.setIsAccepted(true);
         agreement.setActivatedAt(Instant.now());
         
         // Activate user account
@@ -322,11 +345,19 @@ public class AgreementService {
         String resetToken = passwordResetService.generatePasswordResetToken(tenant.getUserId());
         
         Agreement savedAgreement = agreementRepository.save(agreement);
+
+        extensionRequest.ifPresent(requestRecord -> {
+            requestRecord.updateStatus(ExtendAllotmentStatus.AGREEMENT_CREATED);
+            if (agreement.getStartDate() != null && !agreement.getStartDate().isAfter(LocalDate.now())) {
+                requestRecord.updateStatus(ExtendAllotmentStatus.ACTIVE);
+            }
+            extendAllotmentRequestRepository.save(requestRecord);
+        });
         
         // Resolve hostel and room info for SMS context
         String hostelName = "N/A";
         String roomNumber = "N/A";
-        if (agreement.getType() == AgreementType.ROOM && agreement.getRoomId() != null) {
+        if (isPgRoomAgreement(agreement) && agreement.getRoomId() != null) {
             try {
                 Room room = roomRepository.findById(agreement.getRoomId()).orElse(null);
                 if (room != null) {
@@ -378,7 +409,8 @@ public class AgreementService {
             Agreement agreement,
             User tenant,
             TenantPaymentPlan paymentPlan,
-            AcceptAgreementRequest request
+            AcceptAgreementRequest request,
+            ExtendAllotmentRequest extensionRequest
     ) {
         // Use new payment calculation service
         PaymentCalculationService.PaymentBreakdown breakdown = 
@@ -386,7 +418,9 @@ public class AgreementService {
         
         // Total activation payment = AT_AGREEMENT charges (deposit + one-time) + first installment
         BigDecimal firstInstallment = BigDecimal.valueOf(paymentPlan.getInstallmentAmount());
-        BigDecimal totalAmount = breakdown.getTotalAgreementTime().add(firstInstallment);
+        BigDecimal totalAmount = extensionRequest != null
+                ? extensionRequest.getTotalAmount()
+                : breakdown.getTotalAgreementTime().add(firstInstallment);
 
         // Fallback to legacy calculation if no plan snapshot
         if (totalAmount.equals(firstInstallment)) {
@@ -481,11 +515,12 @@ public class AgreementService {
         }
 
         // ROOM path (unchanged)
-        if (agreement.getType() != AgreementType.ROOM) {
+        if (!isPgRoomAgreement(agreement)) {
             return;
         }
 
-        if (roomAllotmentRepository.existsByTenant_UserId(tenant.getUserId())) {
+        if (roomAllotmentRepository.findByAgreementId(agreement.getId()).isPresent()) {
+            log.error("Room allotment already exists for agreement ID: {}", agreement.getId());
             return;
         }
 
@@ -511,6 +546,29 @@ public class AgreementService {
                 .build();
 
         roomAllotmentRepository.save(allotment);
+    }
+
+    private void createExtensionRoomAllotment(
+            ExtendAllotmentRequest extensionRequest,
+            TenantPaymentPlan paymentPlan,
+            Transaction depositTransaction
+    ) {
+        // Idempotency protects against a client retry after a successful acceptance.
+        if (roomAllotmentRepository.findByAgreementId(extensionRequest.getNewAgreementId()).isPresent()) {
+            return;
+        }
+
+        RoomAllotment parentAllotment = roomAllotmentRepository
+                .findByAgreementId(extensionRequest.getCurrentAgreementId())
+                .orElseThrow(() -> new NotFoundException("Original allotment not found for extension"));
+
+        RoomAllotment extensionAllotment = parentAllotment.createExtension(
+                extensionRequest,
+                extensionRequest.getNewAgreementId(),
+                paymentPlan,
+                depositTransaction
+        );
+        roomAllotmentRepository.save(extensionAllotment);
     }
 
     /**
@@ -654,6 +712,11 @@ public class AgreementService {
     private BigDecimal defaultAmount(BigDecimal amount) {
         return amount != null ? amount : BigDecimal.ZERO;
     }
+
+    /** Supports legacy ROOM records while new agreements use the PG_ROOM type. */
+    private boolean isPgRoomAgreement(Agreement agreement) {
+        return agreement.getType() == AgreementType.PG_ROOM || agreement.getType() == AgreementType.ROOM;
+    }
     
     public List<Agreement> getAllAgreements() {
         User owner = com.krunity.HostelManagment.Utils.ApplicationContext.getUser();
@@ -664,17 +727,23 @@ public class AgreementService {
     }
     
     public Optional<Agreement> getAgreementById(String agreementId) {
-        User owner = com.krunity.HostelManagment.Utils.ApplicationContext.getUser();
-        if (owner != null) {
-            // Only return agreement if it belongs to the current owner
-            return agreementRepository.findByIdAndOwnerId(agreementId, owner.getUserId());
+        User user = com.krunity.HostelManagment.Utils.ApplicationContext.getUser();
+        if (user != null && user.getRole() != null
+                && "TENANT".equalsIgnoreCase(user.getRole().getName())) {
+            // A tenant may access only their own agreement. This also supports extension requests.
+            return agreementRepository.findById(agreementId)
+                    .filter(agreement -> user.getUserId().equals(agreement.getUserId()));
+        }
+        if (user != null) {
+            // Owners may access only agreements belonging to them.
+            return agreementRepository.findByIdAndOwnerId(agreementId, user.getUserId());
         }
         return agreementRepository.findById(agreementId);
     }
     
     private User getOwnerForAgreement(Agreement agreement) {
         // If room agreement, get owner from room's hostel
-        if (agreement.getType() == AgreementType.ROOM && agreement.getRoomId() != null) {
+        if (isPgRoomAgreement(agreement) && agreement.getRoomId() != null) {
             Room room = roomRepository.findById(agreement.getRoomId())
                     .orElseThrow(() -> new NotFoundException("Room not found"));
             return room.getHostel().getOwner();

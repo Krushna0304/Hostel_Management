@@ -6,6 +6,7 @@ import com.krunity.HostelManagment.model.RoomAgreementPlan;
 import com.krunity.HostelManagment.model.TenantPaymentPlan;
 import com.krunity.HostelManagment.model.Transaction;
 import com.krunity.HostelManagment.model.User;
+import com.krunity.HostelManagment.model.RoomAllotment;
 import com.krunity.HostelManagment.dto.InstallmentResponse;
 import com.krunity.HostelManagment.dto.PaymentLedgerResponse;
 import com.krunity.HostelManagment.dto.RecordPaymentRequest;
@@ -14,6 +15,7 @@ import com.krunity.HostelManagment.exception.NotFoundException;
 import com.krunity.HostelManagment.repository.PaymentRequestScheduleRepository;
 import com.krunity.HostelManagment.repository.TenantPaymentPlanRepository;
 import com.krunity.HostelManagment.repository.TransactionRepository;
+import com.krunity.HostelManagment.repository.RoomAllotmentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,12 @@ public class PaymentScheduleService {
 
     @Autowired
     private TransactionRepository transactionRepository;
+
+    @Autowired
+    private RoomAllotmentRepository roomAllotmentRepository;
+
+    @Autowired
+    private TenantAgreementSelectionService tenantAgreementSelectionService;
     
     @Autowired
     private CashPaymentOtpService cashPaymentOtpService;
@@ -168,8 +176,12 @@ public class PaymentScheduleService {
      * Returns the full payment schedule for a tenant (all installments).
      */
     public PaymentLedgerResponse getTenantLedger(UUID tenantId) {
-        TenantPaymentPlan plan = paymentPlanRepository.findByTenant_UserIdAndIsActiveTrue(tenantId)
-                .orElseThrow(() -> new NotFoundException("No active payment plan found for tenant"));
+          TenantPaymentPlan plan = resolveCurrentPaymentPlan(tenantId);
+          return getPaymentPlanLedger(plan);
+    }
+
+    /** Returns the ledger for one specific agreement payment plan. */
+    public PaymentLedgerResponse getPaymentPlanLedger(TenantPaymentPlan plan) {
 
         List<PaymentRequestSchedule> schedules =
                 scheduleRepository.findByTenantPaymentPlan_PlanIdOrderByInstallmentNumber(plan.getPlanId());
@@ -338,6 +350,18 @@ public class PaymentScheduleService {
         System.out.println("Schedule updated and saved");
         System.out.println("=== PAYMENT SCHEDULE SERVICE END ===");
         return toInstallmentResponse(schedule);
+    }
+
+    private TenantPaymentPlan resolveCurrentPaymentPlan(UUID tenantId) {
+        com.krunity.HostelManagment.model.Agreement agreement =
+                tenantAgreementSelectionService.selectForTenant(tenantId);
+        RoomAllotment allotment = roomAllotmentRepository
+                .findByTenant_UserIdAndAgreementId(tenantId, agreement.getId())
+                .orElseThrow(() -> new NotFoundException("No allotment found for selected agreement"));
+        if (allotment.getPaymentPlanId() == null) {
+            throw new NotFoundException("No payment plan found for current allotment");
+        }
+        return allotment.getPaymentPlanId();
     }
 
     private InstallmentResponse toInstallmentResponse(PaymentRequestSchedule s) {

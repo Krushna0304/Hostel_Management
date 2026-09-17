@@ -4,7 +4,11 @@ import com.krunity.HostelManagment.dto.ExtensionApprovalDto;
 import com.krunity.HostelManagment.dto.ExtensionRequestDto;
 import com.krunity.HostelManagment.dto.PaymentDetailsDto;
 import com.krunity.HostelManagment.model.ExtendAllotmentRequest;
+import com.krunity.HostelManagment.model.Agreement;
+import com.krunity.HostelManagment.model.RoomAgreementPlan;
+import com.krunity.HostelManagment.service.AgreementService;
 import com.krunity.HostelManagment.service.ExtendedAllotmentService;
+import com.krunity.HostelManagment.service.RoomAgreementPlanService;
 import com.krunity.HostelManagment.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +32,12 @@ public class ExtendedAllotmentController {
 
     @Autowired
     private ExtendedAllotmentService extendedAllotmentService;
+
+    @Autowired
+    private RoomAgreementPlanService roomAgreementPlanService;
+
+    @Autowired
+    private AgreementService agreementService;
 
     // ─── Extension Request Endpoints ─────────────────────────────────────────
 
@@ -267,6 +277,8 @@ public class ExtendedAllotmentController {
         response.put("extensionStartDate", request.getExtensionStartDate());
         response.put("extensionEndDate", request.getExtensionEndDate());
         response.put("activationAmount", request.getActivationAmount());
+        response.put("activationAmountBeforeAdjustment", request.getActivationAmountBeforeAdjustment());
+        response.put("previousAgreementRefundableAmount", request.getPreviousAgreementRefundableAmount());
         response.put("settlementAdjustment", request.getSettlementAdjustment());
         response.put("totalAmount", request.getTotalAmount());
         response.put("expiresAt", request.getExpiresAt());
@@ -296,22 +308,55 @@ public class ExtendedAllotmentController {
             "paymentReference", request.getPaymentReference(),
             "paymentCompletedAt", request.getPaymentCompletedAt(),
             "extensionActive", request.getStatus().toString().equals("ACTIVE"),
-            "message", "Extension payment completed successfully. Your new accommodation period is now active."
+            "message", "Extension payment completed. Please accept the generated agreement to finish the extension."
         );
     }
 
     private java.util.Map<String, Object> createExtensionSummary(ExtendAllotmentRequest request) {
-        return java.util.Map.of(
-            "requestId", request.getExtendRequestId(),
-            "currentAgreementId", request.getCurrentAgreementId(),
-            "newAgreementId", request.getNewAgreementId() != null ? request.getNewAgreementId() : "",
-            "roomNumber", request.getCurrentRoom().getRoomNumber(),
-            "status", request.getStatus(),
-            "extensionPeriod", request.getExtensionStartDate() + " to " + request.getExtensionEndDate(),
-            "totalAmount", request.getTotalAmount(),
-            "createdAt", request.getCreatedAt(),
-            "expiresAt", request.getExpiresAt()
-        );
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("id", request.getExtendRequestId());
+        response.put("requestId", request.getExtendRequestId());
+        response.put("currentAgreementId", request.getCurrentAgreementId());
+        response.put("newAgreementId", request.getNewAgreementId() != null ? request.getNewAgreementId() : "");
+        response.put("status", request.getStatus());
+        response.put("extensionPeriod", request.getExtensionStartDate() + " to " + request.getExtensionEndDate());
+        response.put("currentEndDate", request.getExtensionStartDate());
+        response.put("totalAmount", request.getTotalAmount());
+        response.put("activationAmountBeforeAdjustment", request.getActivationAmountBeforeAdjustment());
+        response.put("previousAgreementRefundableAmount", request.getPreviousAgreementRefundableAmount());
+        response.put("createdAt", request.getCreatedAt());
+        response.put("expiresAt", request.getExpiresAt());
+        response.put("tenantNotes", request.getTenantNotes());
+
+        if (request.getTenant() != null) {
+            response.put("tenantName", request.getTenant().getDisplayName());
+            response.put("tenantMobileNumber", request.getTenant().getPhoneNumber());
+        }
+        if (request.getCurrentRoom() != null) {
+            response.put("roomNumber", request.getCurrentRoom().getRoomNumber());
+            if (request.getCurrentRoom().getFloor() != null) {
+                response.put("floorNumber", request.getCurrentRoom().getFloor().getFloorNumber());
+            }
+            if (request.getCurrentRoom().getHostel() != null) {
+                response.put("hostelName", request.getCurrentRoom().getHostel().getHostelName());
+            }
+        }
+        if (request.getNewPlanId() != null) {
+            RoomAgreementPlan plan = roomAgreementPlanService.getPlanById(request.getNewPlanId());
+            response.put("planName", plan.getPlanName());
+            response.put("planDuration", plan.getDuration() != null
+                    ? plan.getDuration().getValue() + " " + plan.getDuration().getUnit()
+                    : null);
+            response.put("monthlyRent", plan.getRentDetails() != null ? plan.getRentDetails().getMonthlyRent() : null);
+            response.put("securityDeposit", plan.getCharges() != null && plan.getCharges().getSecurityDeposit() != null
+                    ? plan.getCharges().getSecurityDeposit().getAmount() : null);
+        }
+        if (request.getNewAgreementId() != null) {
+            agreementService.getAgreementById(request.getNewAgreementId())
+                    .map(Agreement::getQrToken)
+                    .ifPresent(token -> response.put("activationToken", token));
+        }
+        return response;
     }
 
     private java.util.Map<String, Object> createPendingApprovalSummary(ExtendAllotmentRequest request) {

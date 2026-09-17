@@ -4,6 +4,15 @@ import electricityBillService from '../services/electricityBillService'
 export default function ElectricityPaymentHistory({ bill, onClose }) {
   if (!bill) return null
 
+  const tenantCount = new Set(
+    (bill.payments || [])
+      .map((payment) => payment.tenantId)
+      .filter(Boolean),
+  ).size
+  const tenantLabel = tenantCount === 0
+    ? 'No Tenant'
+    : `${tenantCount} Tenant${tenantCount === 1 ? '' : 's'}`
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString()
   }
@@ -89,7 +98,7 @@ export default function ElectricityPaymentHistory({ bill, onClose }) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Tenant:</span>
-                  <span className="font-medium text-slate-900">{bill.tenantName || 'No Tenant'}</span>
+                  <span className="font-medium text-slate-900">{tenantLabel}</span>
                 </div>
                 {bill.tenantPhone && (
                   <div className="flex justify-between">

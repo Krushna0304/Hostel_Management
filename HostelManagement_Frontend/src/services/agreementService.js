@@ -10,7 +10,11 @@ const agreementService = {
   getAllAgreements: () => apiClient.get("/api/agreements"),
   getAgreementCards: () => apiClient.get("/api/agreements/cards"),
   getAgreementById: (agreementId) => apiClient.get(`/api/agreements/${agreementId}`),
-  getActivePlans: (planType) => apiClient.get(planType ? `/api/plans/active?planType=${planType}` : "/api/plans/active"),
+  getActivePlans: (planType) => {
+    // ROOM was the legacy agreement label. Plans and current agreements use PG_ROOM.
+    const normalizedPlanType = planType === 'ROOM' ? 'PG_ROOM' : planType
+    return apiClient.get(normalizedPlanType ? `/api/plans/active?planType=${normalizedPlanType}` : '/api/plans/active')
+  },
   getPlanById: (planId) => apiClient.get(`/api/plans/${planId}`),
 };
 
@@ -38,8 +42,8 @@ export const tenantService = {
 
 export const ownerReportService = {
   getCollectionSummary: () => apiClient.get("/owner/reports/collections"),
-  getTenantInstallments: (tenantId) => apiClient.get(`/owner/reports/tenant/${tenantId}/installments`),
-  getTenantPaymentHistory: (tenantId) => apiClient.get(`/owner/reports/tenant/${tenantId}/payment-history`),
+  getTenantInstallments: (tenantId, planId) => apiClient.get(`/owner/reports/tenant/${tenantId}/installments`, { params: planId ? { planId } : undefined }),
+  getTenantPaymentHistory: (tenantId, planId) => apiClient.get(`/owner/reports/tenant/${tenantId}/payment-history`, { params: planId ? { planId } : undefined }),
   collectPayment: (scheduleId, data) => apiClient.post(`/owner/reports/collect-payment/${scheduleId}`, data),
   sendInstallmentOtp: (scheduleId) => apiClient.post(`/api/cash-payment-otp/send-installment/${scheduleId}`),
 };

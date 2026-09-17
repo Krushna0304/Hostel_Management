@@ -43,8 +43,9 @@ public class ExtendAllotmentRequest {
     private Room currentRoom;
 
     // Extension Details
-    @Column(name = "new_plan_id", nullable = false)
-    private UUID newPlanId;
+    // Room agreement plans are stored in MongoDB and use string ObjectIds.
+    @Column(name = "new_plan_id", nullable = false, length = 255)
+    private String newPlanId;
 
     @Column(name = "extension_start_date", nullable = false)
     private LocalDate extensionStartDate;
@@ -62,6 +63,15 @@ public class ExtendAllotmentRequest {
     @Column(name = "activation_amount", precision = 10, scale = 2, nullable = false)
     @Builder.Default
     private BigDecimal activationAmount = BigDecimal.ZERO;
+
+    // Immutable snapshots used to make the extension/settlement adjustment auditable.
+    @Column(name = "previous_agreement_refundable_amount", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal previousAgreementRefundableAmount = BigDecimal.ZERO;
+
+    @Column(name = "activation_amount_before_adjustment", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal activationAmountBeforeAdjustment = BigDecimal.ZERO;
 
     @Column(name = "settlement_adjustment", precision = 10, scale = 2)
     @Builder.Default
@@ -102,6 +112,16 @@ public class ExtendAllotmentRequest {
 
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
+
+    @PrePersist
+    private void initializeTimestamps() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
+    }
 
     // Business Methods
 

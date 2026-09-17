@@ -18,7 +18,7 @@ public class AgreementMapper {
     
     public static Agreement toEntity(CreateRoomAgreementRequest request, RoomAgreementPlan planSnapshot) {
         Agreement.AgreementBuilder builder = Agreement.builder()
-                .type(AgreementType.ROOM)
+                .type(AgreementType.PG_ROOM)
                 .userId(request.getUserId())
                 .roomId(request.getRoomId())
                 .planId(request.getPlanId())
@@ -45,7 +45,7 @@ public class AgreementMapper {
     public static AgreementResponse toResponse(Agreement agreement) {
         AgreementResponse response = new AgreementResponse();
         response.setId(agreement.getId());
-        response.setType(agreement.getType());
+        response.setType(normalizePlanCompatibleType(agreement.getType()));
         response.setStatus(agreement.getStatus());
         response.setUserId(agreement.getUserId());
         response.setRoomId(agreement.getRoomId());
@@ -61,6 +61,7 @@ public class AgreementMapper {
         response.setQrToken(agreement.getQrToken());
         response.setQrExpiry(agreement.getQrExpiry());
         response.setQrUsed(agreement.getQrUsed());
+        response.setIsAccepted(agreement.getIsAccepted());
         response.setCreatedAt(agreement.getCreatedAt());
         response.setActivatedAt(agreement.getActivatedAt());
         
@@ -98,8 +99,9 @@ public class AgreementMapper {
         
         // Basic agreement info
         response.setId(agreement.getId());
-        response.setType(agreement.getType());
+        response.setType(normalizePlanCompatibleType(agreement.getType()));
         response.setStatus(agreement.getStatus());
+        response.setIsAccepted(agreement.getIsAccepted());
         response.setStartDate(agreement.getStartDate());
         response.setEndDate(agreement.getEndDate());
         response.setCreatedAt(agreement.getCreatedAt() != null ? 
@@ -211,6 +213,11 @@ public class AgreementMapper {
         }
         
         return response;
+    }
+
+    /** Converts legacy ROOM agreements to the plan-compatible PG_ROOM value. */
+    private static AgreementType normalizePlanCompatibleType(AgreementType type) {
+        return type == AgreementType.ROOM ? AgreementType.PG_ROOM : type;
     }
 }
 

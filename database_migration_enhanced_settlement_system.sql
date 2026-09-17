@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS extend_allotment_requests (
     current_room_id UUID REFERENCES rooms(room_id) ON DELETE SET NULL,
     
     -- Extension Details
-    new_plan_id UUID, -- Will reference room_agreement_plans when that table exists
+    new_plan_id VARCHAR(255), -- MongoDB RoomAgreementPlan ObjectId
     extension_start_date DATE NOT NULL,
     extension_end_date DATE NOT NULL,
     

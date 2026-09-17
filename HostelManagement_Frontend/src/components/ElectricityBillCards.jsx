@@ -190,13 +190,19 @@ export default function ElectricityBillCards() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {group.bills.map(bill => (
-                <Card 
-                  key={bill.billId} 
-                  className="hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() => handleViewPaymentHistory(bill)}
-                >
-                  <div className="p-3">
+              {group.bills.map((bill) => {
+                const tenantCount = Number(bill.tenantCount || 0)
+                const tenantLabel = tenantCount === 0
+                  ? 'No Tenant'
+                  : `${tenantCount} Tenant${tenantCount === 1 ? '' : 's'}`
+
+                return (
+                  <Card 
+                    key={bill.billId} 
+                    className="hover:shadow-lg transition-shadow cursor-pointer"
+                    onClick={() => handleViewPaymentHistory(bill)}
+                  >
+                    <div className="p-3">
                     {/* Header */}
                     <div className="flex items-start justify-between mb-2">
                       <div className="min-w-0 flex-1 mr-2">
@@ -212,7 +218,7 @@ export default function ElectricityBillCards() {
 
                     {/* Tenant Info */}
                     <div className="mb-2 text-xs text-slate-600 truncate">
-                      {bill.tenantName || 'No Tenant'}
+                      {tenantLabel}
                     </div>
 
                     {/* Amount */}
@@ -231,9 +237,10 @@ export default function ElectricityBillCards() {
                         </div>
                       </div>
                     )}
-                  </div>
-                </Card>
-              ))}
+                    </div>
+                  </Card>
+                )
+              })}
             </div>
           </div>
         ))

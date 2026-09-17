@@ -393,7 +393,7 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate, filte
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Room</p>
+                     <h4 className="mt-1 text-lg font-semibold text-slate-950">{room.roomNumber}</h4>
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                       isFlat 
                         ? 'bg-purple-100 text-purple-800 border border-purple-200' 
@@ -408,7 +408,6 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate, filte
                       </span>
                     )}
                   </div>
-                  <h4 className="mt-1 text-lg font-semibold text-slate-950">{room.roomNumber}</h4>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <Badge variant={room.isActive ? 'success' : 'warning'}>
@@ -425,7 +424,7 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate, filte
                   )}
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-1 grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-slate-50 px-3 py-2">
                   <p className="text-xs uppercase tracking-[0.15em] text-slate-400">Total beds</p>
                   <p className="mt-1 text-xl font-semibold text-slate-950">{room.totalBeds ?? '-'}</p>
@@ -507,9 +506,9 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate, filte
         {/* Tenant modal — guard selectedRoom so children are not evaluated when closed */}
       {selectedRoom ? (
       <CenteredModal open onClose={closeModal}>
-          <Card className="w-full overflow-hidden shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
-              <div>
+          <Card className="flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden shadow-2xl">
+            <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Room tenants</p>
                   <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
@@ -523,9 +522,9 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate, filte
                 <h3 className="mt-2 text-xl font-semibold text-slate-950">Room {selectedRoom.roomNumber}</h3>
                 <p className="mt-1 text-sm text-slate-500">{hostelName} · Floor {floorNumber}</p>
               </div>
-              <Button label="Close" variant="secondary" onClick={closeModal} />
+              <Button label="Close" variant="secondary" onClick={closeModal} className="flex-shrink-0" />
             </div>
-            <div className="px-6 py-5">
+            <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
               {tenantLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-16 rounded-2xl" />
@@ -540,7 +539,7 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate, filte
                 />
               ) : (
                 <div className="space-y-3">
-                  {roomTenants.map((tenant) => {
+                  {roomTenants.map((tenant, index) => {
                     const isFlat = tenant.agreementType === 'FLAT'
                     const hasCotenant = isFlat && tenant.coTenantNames && tenant.coTenantNames.length > 0
                     const isUpcoming = tenant.roomAllotmentStatus === 'UPCOMING'
@@ -550,7 +549,7 @@ const RoomPanel = ({ hostelId, hostelName, floorId, floorNumber, navigate, filte
 
                     return (
                       <div
-                        key={tenant.tenantId || `${tenant.roomId}-${tenant.tenantName}`}
+                        key={`${tenant.allotmentId || tenant.tenantId || tenant.roomId || 'tenant'}-${tenant.planId || tenant.allotmentDate || 'agreement'}-${index}`}
                         className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -761,10 +760,10 @@ const Floors = () => {
           {/* Floors Section - Horizontal Layout */}
           <Card>
             <CardHeader
-              title="Floors"
+              // title="Floors"
               description="Select a floor to view its rooms."
             />
-            <CardContent className="pt-0 pb-5">
+            <CardContent className="pt-1 pb-0">
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {floors.map((floor) => {
                   const isSelected = selectedFloorId === floor.floorId
@@ -786,11 +785,11 @@ const Floors = () => {
                           <LayersIcon className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${
+                          {/* <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${
                             isSelected ? 'text-sky-600' : 'text-slate-400'
                           }`}>
                             Floor
-                          </p>
+                          </p> */}
                           <h3 className={`mt-0.5 text-base font-semibold ${
                             isSelected ? 'text-sky-900' : 'text-slate-950'
                           }`}>

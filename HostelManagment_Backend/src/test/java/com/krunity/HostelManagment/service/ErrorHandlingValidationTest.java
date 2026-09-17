@@ -186,7 +186,7 @@ class ErrorHandlingValidationTest {
         // Given
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-error-001");
-        requestDto.setPlanId(UUID.randomUUID());
+        requestDto.setPlanId(UUID.randomUUID().toString());
 
         when(agreementService.getAgreementById("agreement-error-001")).thenReturn(Optional.of(agreement));
         when(roomAllotmentRepository.findByAgreementId("agreement-error-001")).thenReturn(Optional.empty());
@@ -388,7 +388,7 @@ class ErrorHandlingValidationTest {
 
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-other-001");
-        requestDto.setPlanId(UUID.randomUUID());
+        requestDto.setPlanId(UUID.randomUUID().toString());
 
         when(agreementService.getAgreementById("agreement-other-001")).thenReturn(Optional.of(anotherTenantAgreement));
 
@@ -408,7 +408,7 @@ class ErrorHandlingValidationTest {
 
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-error-001");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         when(agreementService.getAgreementById("agreement-error-001")).thenReturn(Optional.of(agreement));
         when(roomAllotmentRepository.findByAgreementId("agreement-error-001")).thenReturn(Optional.of(allotment));

@@ -34,15 +34,15 @@ function Button({
       onClick={onClick}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 disabled:cursor-not-allowed disabled:opacity-60 min-w-0',
         variants[variant],
         sizes[size],
         fullWidth && 'w-full',
         className,
       )}
     >
-      {loading ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : icon}
-      <span>{label || children}</span>
+      {loading ? <SpinnerIcon className="h-4 w-4 animate-spin flex-shrink-0" /> : icon}
+      <span className="min-w-0 flex-1 text-center">{label || children}</span>
     </button>
   )
 }

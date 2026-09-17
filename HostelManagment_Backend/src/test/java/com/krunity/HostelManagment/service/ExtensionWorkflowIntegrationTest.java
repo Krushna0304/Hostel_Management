@@ -125,7 +125,7 @@ class ExtensionWorkflowIntegrationTest {
         // Given - Create extension request
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-ext-001");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
         requestDto.setTenantNotes("Request 6-month extension");
 
         when(agreementService.getAgreementById("agreement-ext-001")).thenReturn(Optional.of(currentAgreement));
@@ -181,7 +181,7 @@ class ExtensionWorkflowIntegrationTest {
                 .tenant(tenant)
                 .owner(owner)
                 .currentRoom(room)
-                .newPlanId(UUID.fromString(plan.getId()))
+                .newPlanId(plan.getId())
                 .extensionStartDate(currentAllotment.getEndDate())
                 .extensionEndDate(currentAllotment.getEndDate().plusMonths(6))
                 .status(ExtendAllotmentStatus.PENDING_OWNER_APPROVAL)
@@ -221,7 +221,7 @@ class ExtensionWorkflowIntegrationTest {
         // Given - First extension request exists
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-ext-001");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         when(agreementService.getAgreementById("agreement-ext-001")).thenReturn(Optional.of(currentAgreement));
         when(roomAllotmentRepository.findByAgreementId("agreement-ext-001")).thenReturn(Optional.of(currentAllotment));
@@ -246,7 +246,7 @@ class ExtensionWorkflowIntegrationTest {
                 .owner(owner)
                 .status(ExtendAllotmentStatus.PENDING_OWNER_APPROVAL)
                 .currentRoom(room)
-                .newPlanId(UUID.fromString(plan.getId()))
+                .newPlanId(plan.getId())
                 .extensionStartDate(LocalDate.now())
                 .extensionEndDate(LocalDate.now().plusMonths(6))
                 .build();
@@ -311,7 +311,7 @@ class ExtensionWorkflowIntegrationTest {
         // Given
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("non-existent-agreement");
-        requestDto.setPlanId(UUID.randomUUID());
+        requestDto.setPlanId(UUID.randomUUID().toString());
 
         when(agreementService.getAgreementById(anyString())).thenReturn(Optional.empty());
 
@@ -351,7 +351,7 @@ class ExtensionWorkflowIntegrationTest {
 
         ExtensionRequestDto requestDto = new ExtensionRequestDto();
         requestDto.setCurrentAgreementId("agreement-ext-001");
-        requestDto.setPlanId(UUID.fromString(plan.getId()));
+        requestDto.setPlanId(plan.getId());
 
         when(agreementService.getAgreementById("agreement-ext-001")).thenReturn(Optional.of(currentAgreement));
         when(roomAllotmentRepository.findByAgreementId("agreement-ext-001")).thenReturn(Optional.of(currentAllotment));

@@ -31,7 +31,10 @@ public class RoomAllotment {
     @JoinColumn(name = "room_id", nullable = false)
     private Room room;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    // A tenant can have a historical/current/future allotment chain when an
+    // agreement is extended. A one-to-one mapping creates a UNIQUE constraint
+    // on tenant_id and prevents that valid history from being stored.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
     private User tenant;
 

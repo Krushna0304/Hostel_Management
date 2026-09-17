@@ -23,6 +23,7 @@ public class ElectricityBillDto {
     private UUID tenantId;
     private String tenantName;
     private String tenantPhone;
+    private Integer tenantCount;
     private Integer billMonth;
     private Integer billYear;
     private String billPeriod; // "January 2024"
