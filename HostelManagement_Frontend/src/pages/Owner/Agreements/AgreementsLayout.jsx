@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import AgreementStepper from './AgreementStepper'
 import AgreementList from './AgreementList'
+import ExistingTenantOnboarding from './ExistingTenantOnboarding'
 import { Button, PageHeader } from '../../../components/ui'
 
 export default function AgreementsLayout() {
@@ -38,6 +39,7 @@ export default function AgreementsLayout() {
               <option value="REJECTED">Rejected</option>
             </select>
             <Button label="Create agreement" onClick={() => navigate('/owner/agreements/create')} />
+            <Button label="Onboard Existing Tenant" variant="secondary" onClick={() => navigate('/owner/agreements/onboard-existing')} />
           </div>
         )}
       />
@@ -45,6 +47,7 @@ export default function AgreementsLayout() {
       <Routes>
         <Route path="/" element={<AgreementList searchQuery={searchQuery} statusFilter={statusFilter} />} />
         <Route path="/create" element={<AgreementStepper />} />
+        <Route path="/onboard-existing" element={<ExistingTenantOnboarding />} />
       </Routes>
     </div>
   )

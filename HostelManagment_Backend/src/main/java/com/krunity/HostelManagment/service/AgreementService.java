@@ -3,6 +3,8 @@ package com.krunity.HostelManagment.service;
 import com.krunity.HostelManagment.dto.AcceptAgreementRequest;
 import com.krunity.HostelManagment.dto.CreateFlatAgreementRequest;
 import com.krunity.HostelManagment.dto.QrActivationResponse;
+import com.krunity.HostelManagment.dto.ExistingTenantOnboardingRequest;
+import com.krunity.HostelManagment.dto.ExistingTenantOnboardingResponse;
 import com.krunity.HostelManagment.model.Agreement;
 import com.krunity.HostelManagment.enums.AgreementStatus;
 import com.krunity.HostelManagment.enums.AgreementType;
@@ -22,6 +24,7 @@ import org.slf4j.ILoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -32,6 +35,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -84,6 +91,18 @@ public class AgreementService {
 
     @Autowired
     private RoomAvailabilityService roomAvailabilityService;
+
+    @Autowired
+    private HostelRepository hostelRepository;
+
+    @Autowired
+    private FloorRepository floorRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
     
     private static final int QR_TOKEN_EXPIRY_HOURS = 72; // 3 days
     
@@ -142,6 +161,126 @@ public class AgreementService {
         notificationService.sendQrActivationSms(savedAgreement, user, hostelName, roomNumber);
         
         return savedAgreement;
+    }
+
+    /**
+     * Onboards a whole existing-tenant batch atomically. Validation intentionally
+     * happens before the first user/agreement is persisted so a bad spreadsheet
+     * cannot leave partial records behind.
+     */
+    @Transactional
+    public ExistingTenantOnboardingResponse onboardExistingTenants(ExistingTenantOnboardingRequest request) {
+        User owner = com.krunity.HostelManagment.Utils.ApplicationContext.getUser();
+        if (owner == null) throw new IllegalStateException("An authenticated owner is required");
+        if (!"PG_ROOM".equalsIgnoreCase(request.getAgreementType()) && !"ROOM".equalsIgnoreCase(request.getAgreementType())) {
+            throw new IllegalArgumentException("Existing-tenant batch onboarding currently supports Room Agreement only");
+        }
+        Hostel hostel = hostelRepository.findById(request.getHostelId())
+                .filter(h -> h.getOwner().getUserId().equals(owner.getUserId()))
+                .orElseThrow(() -> new NotFoundException("Hostel not found or you do not have access to it"));
+        RoomAgreementPlan plan = roomAgreementPlanService.getPlanById(request.getPlanId());
+        if (!Boolean.TRUE.equals(plan.getIsActive()) || (plan.getOwnerId() != null && !plan.getOwnerId().equals(owner.getUserId()))) {
+            throw new IllegalArgumentException("Selected plan is not available to this owner");
+        }
+        if (plan.getPlanType() != null && !"PG_ROOM".equalsIgnoreCase(plan.getPlanType())) {
+            throw new IllegalArgumentException("Selected plan is not a room agreement plan");
+        }
+
+        Map<Integer, Room> resolvedRooms = validateExistingTenantBatch(request, hostel, plan);
+        Role tenantRole = roleRepository.findByName("TENANT").orElseThrow(() -> new NotFoundException("Tenant role not found"));
+        List<ExistingTenantOnboardingResponse.Result> results = new ArrayList<>();
+
+        for (int index = 0; index < request.getTenants().size(); index++) {
+            ExistingTenantOnboardingRequest.TenantRow row = request.getTenants().get(index);
+            String username = nextAvailableUsername(row.getName(), row.getPhoneNumber());
+            String temporaryPassword = "Onboard@" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            // The temporary password is returned once to the owner; only its BCrypt hash is persisted.
+            User tenant = userRepository.save(User.builder().displayName(row.getName().trim()).username(username)
+                    .phoneNumber(normalizePhone(row.getPhoneNumber())).passwordHash(passwordEncoder.encode(temporaryPassword))
+                    .role(tenantRole).isActive(true).build());
+            Room room = resolvedRooms.get(index);
+            Agreement agreement = Agreement.builder().type(AgreementType.PG_ROOM).status(AgreementStatus.ACTIVE)
+                    .userId(tenant.getUserId()).roomId(room.getRoomId()).ownerId(owner.getUserId())
+                    .planId(plan.getId()).planSnapshot(plan).startDate(row.getStartDate()).endDate(row.getEndDate())
+                    .createdAt(Instant.now()).activatedAt(Instant.now()).qrUsed(true).isAccepted(true)
+                    .rent(plan.getRentDetails() == null ? null : plan.getRentDetails().getMonthlyRent()).build();
+            agreement = agreementRepository.save(agreement);
+            TenantPaymentPlan paymentPlan = createPaymentPlan(agreement, tenant);
+            // Existing onboarding records no fictional activation collection. The required audit row is scheduled at zero.
+            Transaction onboardingMarker = transactionRepository.save(Transaction.builder().planId(paymentPlan)
+                    .fromUser(tenant).toUser(owner).amount(0L).mode(TransactionMode.CASH)
+                    .status(TransactionStatus.SCHEDULED).reason("Existing tenant onboarding - no activation payment")
+                    .otpVerified(false).build());
+            createRoomAllotment(agreement, tenant, paymentPlan, onboardingMarker);
+            paymentScheduleService.generateOnboardingSchedule(paymentPlan, plan);
+            roomAgreementPlanService.markPlanAsInUse(plan.getId());
+            results.add(new ExistingTenantOnboardingResponse.Result(row.getName(), username, temporaryPassword, room.getRoomNumber(),
+                    agreement.getStatus().name(), "GENERATED"));
+        }
+        return new ExistingTenantOnboardingResponse(results.size(), results);
+    }
+
+    private Map<Integer, Room> validateExistingTenantBatch(ExistingTenantOnboardingRequest request, Hostel hostel, RoomAgreementPlan plan) {
+        List<String> errors = new ArrayList<>();
+        Map<Integer, Room> rooms = new HashMap<>();
+        Map<UUID, Integer> requestedBeds = new HashMap<>();
+        Set<String> phones = new HashSet<>();
+        for (int i = 0; i < request.getTenants().size(); i++) {
+            int rowNo = i + 1;
+            ExistingTenantOnboardingRequest.TenantRow row = request.getTenants().get(i);
+            String phone = normalizePhone(row.getPhoneNumber());
+            if (row.getName() == null || row.getName().trim().isEmpty()) errors.add("Row " + rowNo + ": Name is required.");
+            if (!phone.matches("^[0-9]{10,15}$")) errors.add("Row " + rowNo + ": Phone number must contain 10 to 15 digits.");
+            else if (!phones.add(phone)) errors.add("Row " + rowNo + ": Duplicate phone number in this batch.");
+            else if (userRepository.existsByPhoneNumber(phone)) errors.add("Row " + rowNo + ": Phone number already belongs to an existing tenant.");
+            if (row.getStartDate() == null || row.getEndDate() == null || !row.getEndDate().isAfter(row.getStartDate()))
+                errors.add("Row " + rowNo + ": End date must be after start date.");
+            else if (plan.getDuration() != null) {
+                int duration = "NOT_FIXED".equalsIgnoreCase(plan.getDuration().getDurationType())
+                        ? (plan.getDuration().getMinimumStayMonths() == null ? 1 : plan.getDuration().getMinimumStayMonths())
+                        : (plan.getDuration().getValue() == null ? 0 : plan.getDuration().getValue());
+                LocalDate minimumEnd = "YEAR".equalsIgnoreCase(plan.getDuration().getUnit())
+                        && !"NOT_FIXED".equalsIgnoreCase(plan.getDuration().getDurationType())
+                        ? row.getStartDate().plusYears(duration) : row.getStartDate().plusMonths(duration);
+                if (duration > 0 && row.getEndDate().isBefore(minimumEnd))
+                    errors.add("Row " + rowNo + ": End date must satisfy the selected plan duration.");
+            }
+            UUID floorId = row.getFloorId() != null ? row.getFloorId() : request.getDefaultFloorId();
+            List<Room> matching = roomRepository.findByHostel_HostelId(hostel.getHostelId()).stream()
+                    .filter(r -> Boolean.TRUE.equals(r.getIsActive()) && r.getRoomNumber().equalsIgnoreCase(row.getRoomNumber().trim()))
+                    .filter(r -> floorId == null || r.getFloor().getFloorId().equals(floorId)).toList();
+            if (floorId == null && matching.size() > 1) errors.add("Row " + rowNo + ": Room " + row.getRoomNumber() + " exists on multiple floors. Please select a floor.");
+            else if (matching.isEmpty()) errors.add("Row " + rowNo + ": Room/floor combination does not exist in the selected hostel.");
+            else if (matching.size() > 1) errors.add("Row " + rowNo + ": Room selection is ambiguous. Please select a floor.");
+            else { rooms.put(i, matching.get(0)); requestedBeds.merge(matching.get(0).getRoomId(), 1, Integer::sum); }
+        }
+        for (Map.Entry<UUID, Integer> entry : requestedBeds.entrySet()) {
+            Room room = rooms.values().stream().filter(r -> r.getRoomId().equals(entry.getKey())).findFirst().orElseThrow();
+            // Use the existing date-aware availability rule for every row. The batch count protects shared rooms.
+            int lowestAvailable = Integer.MAX_VALUE;
+            for (int i = 0; i < request.getTenants().size(); i++) if (entry.getKey().equals(rooms.get(i) == null ? null : rooms.get(i).getRoomId())) {
+                ExistingTenantOnboardingRequest.TenantRow row = request.getTenants().get(i);
+                lowestAvailable = Math.min(lowestAvailable, roomAvailabilityService.getAvailableBeds(room.getRoomId(), row.getStartDate(), row.getEndDate()));
+            }
+            if (lowestAvailable < entry.getValue()) errors.add("Room " + room.getRoomNumber() + ": not enough beds available for this batch.");
+        }
+        if (!errors.isEmpty()) throw new IllegalArgumentException(String.join(" ", errors));
+        return rooms;
+    }
+
+    private String nextAvailableUsername(String name, String phone) {
+        String normalized = name == null ? "tenant" : name.replaceAll("[^A-Za-z0-9]", "").toLowerCase();
+        String prefix = (normalized + "xxxx").substring(0, 4);
+        String digits = normalizePhone(phone);
+        String base = prefix + digits.substring(Math.max(0, digits.length() - 4));
+        String candidate = base;
+        int suffix = 2;
+        while (userRepository.existsByUsername(candidate)) candidate = base + suffix++;
+        return candidate;
+    }
+
+    private String normalizePhone(String phone) {
+        return phone == null ? "" : phone.replaceAll("\\D", "");
     }
 
     /**

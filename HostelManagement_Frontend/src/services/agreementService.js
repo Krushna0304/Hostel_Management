@@ -3,6 +3,7 @@ import apiClient from "./apiClient";
 const agreementService = {
   createRoomAgreement: (data) => apiClient.post("/api/agreements/room", data),
   createFlatAgreement: (data) => apiClient.post("/api/agreements/flat", data),
+  onboardExistingTenants: (data) => apiClient.post("/api/agreements/onboard-existing", data),
   getAgreementByQrToken: (token) => apiClient.get(`/api/agreements/qr/${token}`),
   getQrCodeImage: (token) => apiClient.get(`/api/agreements/qr/${token}/image`),
   acceptAgreement: (agreementId, data) => apiClient.post(`/api/agreements/${agreementId}/accept`, data),

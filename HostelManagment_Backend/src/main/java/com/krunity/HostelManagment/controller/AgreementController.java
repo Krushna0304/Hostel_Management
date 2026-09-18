@@ -7,6 +7,8 @@ import com.krunity.HostelManagment.dto.AgreementCardResponse;
 import com.krunity.HostelManagment.dto.AgreementResponse;
 import com.krunity.HostelManagment.dto.CreateFlatAgreementRequest;
 import com.krunity.HostelManagment.dto.CreateRoomAgreementRequest;
+import com.krunity.HostelManagment.dto.ExistingTenantOnboardingRequest;
+import com.krunity.HostelManagment.dto.ExistingTenantOnboardingResponse;
 import com.krunity.HostelManagment.dto.QrActivationResponse;
 import com.krunity.HostelManagment.dto.QrCodeResponse;
 import com.krunity.HostelManagment.model.Agreement;
@@ -85,6 +87,13 @@ public class AgreementController {
             @Valid @RequestBody CreateFlatAgreementRequest request) {
         QrActivationResponse response = agreementService.createFlatAgreement(request);
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+    }
+
+    /** Batch onboarding for tenants who are already resident and therefore do not use QR acceptance. */
+    @PostMapping("/onboard-existing")
+    public ResponseEntity<ExistingTenantOnboardingResponse> onboardExistingTenants(
+            @Valid @RequestBody ExistingTenantOnboardingRequest request) {
+        return ResponseEntity.ok(agreementService.onboardExistingTenants(request));
     }
 
 

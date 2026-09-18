@@ -161,6 +161,41 @@ public class PaymentScheduleService {
     }
 
     /**
+     * Creates a schedule for a tenant who was already living in the property.
+     * Unlike QR activation, no installment is inferred as paid.
+     */
+    @Transactional
+    public List<PaymentRequestSchedule> generateOnboardingSchedule(TenantPaymentPlan plan, RoomAgreementPlan planSnapshot) {
+        int total = plan.getPendingInstallments() != null ? plan.getPendingInstallments() : 12;
+        LocalDate start = plan.getStartDate();
+        int dueDay = planSnapshot != null && planSnapshot.getPaymentModel() != null
+                && planSnapshot.getPaymentModel().getDueDayOfMonth() != null
+                ? planSnapshot.getPaymentModel().getDueDayOfMonth() : 5;
+        int monthsPerInstallment = 1;
+        if (!AgreementService.isNotFixedDuration(planSnapshot) && planSnapshot != null
+                && planSnapshot.getDuration() != null && planSnapshot.getDuration().getValue() != null
+                && planSnapshot.getPaymentModel() != null && planSnapshot.getPaymentModel().getInstallments() != null
+                && planSnapshot.getPaymentModel().getInstallments() > 0) {
+            monthsPerInstallment = Math.max(1, (int) Math.ceil((double) planSnapshot.getDuration().getValue()
+                    / planSnapshot.getPaymentModel().getInstallments()));
+        }
+        List<PaymentRequestSchedule> schedules = new ArrayList<>();
+        for (int i = 0; i < total; i++) {
+            LocalDate base = start.plusMonths((long) i * monthsPerInstallment);
+            LocalDate due = i == 0 ? start : base.withDayOfMonth(Math.min(dueDay, base.lengthOfMonth()));
+            schedules.add(PaymentRequestSchedule.builder().tenantPaymentPlan(plan).installmentNumber(i + 1)
+                    .amount(plan.getInstallmentAmount()).dueDate(due).paymentStatus(TransactionStatus.SCHEDULED)
+                    .paidAmount(0L).lateFeeApplied(0L).build());
+        }
+        if (planSnapshot != null && planSnapshot.getDuration() != null && planSnapshot.getDuration().getValue() != null) {
+            plan.setEndDate("YEAR".equalsIgnoreCase(planSnapshot.getDuration().getUnit())
+                    ? start.plusYears(planSnapshot.getDuration().getValue()) : start.plusMonths(planSnapshot.getDuration().getValue()));
+        }
+        paymentPlanRepository.save(plan);
+        return scheduleRepository.saveAll(schedules);
+    }
+
+    /**
      * Overloaded method for backward compatibility
      * Also calculates agreement end date based on plan duration, not installment dates
      */
